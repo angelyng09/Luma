@@ -1,0 +1,172 @@
+Luma Technical Roadmap (Community-First, Build-Ready Version)
+1. Product Philosophy 
+Luma is not an indoor navigation app and not a static accessibility map. 
+It is a community-driven accessibility intelligence platform that helps visually impaired users:
+- Decide whether a place is usable before going
+- Understand what to expect once there
+- Contribute real-time, experience-based knowledge that benefits others
+- Influence institutional change through aggregated feedback
+
+This aligns with your pivot away from expensive custom mapping and toward scalable user-generated value.
+
+2. Core System Architecture (High-Level)
+Client (iOS / SwiftUI)
+- Voice-first interface (VoiceOver-native)
+- Minimal gestures, no visual dependency
+- Offline-tolerant caching
+Backend (API + Database)
+- Places & accessibility intelligence
+- Community feedback + trust signals
+- Temporal weighting (recency matters)
+- Moderation + credibility scoring
+AI / Logic Layer (Lightweight, Rule-Based First)
+- Voice-to-text parsing
+- Feedback categorization
+- Summary generation (“What people say about this place”)
+
+3. Core User Flows (Rebuilt Without QR Codes)
+3.1 Pre-Visit Decision Flow (Primary Use Case)
+Goal: Help users decide if a place is worth going to.
+
+User Actions
+Voice input:
+
+“Can I go to X hospital safely?”
+“How accessible is this mall for blind users?”
+
+System returns:
+- Ranked place list
+- Spoken summary first, details optional
+- System Output (Very Specific)
+
+For each place:
+- Overall Accessibility Confidence Score (0–100)
+(Not “rating” — confidence implies uncertainty + evidence)
+- What Works Well (top 2)
+- Common Problems (top 2)
+- Last Community Update (“2 hours ago”)
+
+Who This Place Works For
+- Blind users with cane
+- Wheelchair users
+- Low vision users
+
+Technical Implementation
+- PlaceIndex table with:
+    -Weighted score = Σ(dimension × recency × user credibility)
+- NLP clustering of comments into:
+    - recurring positives
+    - recurring negatives
+- Voice-first summary auto-generated from clusters
+
+3.2 On-Site Experience Flow (Without QR)
+Goal: Let users quickly understand what others experienced recently at the same place.
+
+Trigger Methods
+- GPS proximity
+- Manual voice command:
+  “I’m inside X mall now”
+
+System Response
+ “Here’s what people reported today at this location:”
+    - Elevator working (confirmed 3 hours ago)
+    - Security desk helpful
+    - Restroom hard to locate
+
+Technical Functions
+- Geo-fenced place detection
+- Time-decayed feedback prioritization
+- Local cache of recent reports (for poor connectivity)
+
+3.3 Real-Time Community Feedback Loop (Core Value)
+
+Feedback Submission (Voice-Only by Default)
+User speaks:
+  “The elevator near the east entrance is broken.”
+System Pipeline
+- Speech → text
+- Auto-tagging:
+    - Facility: elevator
+    - Status: broken
+    - Confidence: high (concrete observation)
+User confirms via voice:
+  “Is this correct?”
+    Stored As
+    Feedback {
+      place_id
+      issue_type
+      severity
+      timestamp
+      confidence_level
+      user_reputation_weight
+    }
+
+Immediate Effects
+- Other users are alerted
+- Place score temporarily adjusted
+- Venue dashboard updated (future phase)
+
+4. Accessibility Dimensions (Operationalized)
+
+Instead of abstract dimensions, each becomes measurable signals.
+
+4.1 Dimensions → Signals
+Navigation Clarity
+- Number of reports mentioning “confusing”
+- Presence of staff assistance reports
+
+Facility Reliability
+- Elevator uptime (% of last 30 days)
+- Restroom accessibility consistency
+
+Sensory Environment
+- Noise complaints
+- Overcrowding frequency by time of day
+
+Staff Responsiveness
+- Mentions of help received
+- Problem resolution follow-ups
+
+5. Trust, Credibility & Cold-Start Strategy
+5.1 User Credibility Scoring (Internal)
+- Feedback history
+- Consistency with others
+- Time-on-platform
+- Users don’t see a “score” — the system uses it silently.
+
+5.2 Anti-Misinformation Controls
+- Conflicting reports flagged
+- “Unconfirmed” labels for single reports
+- Automatic decay of old reports
+
+6. Community Exchange Features (Beyond Reviews)
+6.1 Ask-the-Community
+Users can ask:
+  “Is this hospital manageable alone?”
+Others reply with voice responses.
+
+6.2 Experience Threads
+Instead of reviews:
+  “My visit today”
+  “What changed since last time”
+These are time-based narratives, not star ratings.
+
+7. Metrics 
+Adoption
+- Monthly active blind users
+- Voice queries per user
+Engagement
+- Feedback submissions per visit
+- Replies to community questions
+Coverage
+- % of key Shanghai venues with ≥5 recent reports
+Impact
+- Reduced “failed trips” (user self-report)
+- Venue response rate (future)
+
+8. MVP Scope (Strict, Buildable)
+- Voice search & summaries
+- Community feedback (voice → structured)
+- Time-weighted accessibility confidence
+- Location-based recent reports
+- VoiceOver-first UX

@@ -1,172 +1,390 @@
-Luma Technical Roadmap (Community-First, Build-Ready Version)
-1. Product Philosophy 
-Luma is not an indoor navigation app and not a static accessibility map. 
-It is a community-driven accessibility intelligence platform that helps visually impaired users:
-- Decide whether a place is usable before going
-- Understand what to expect once there
-- Contribute real-time, experience-based knowledge that benefits others
-- Influence institutional change through aggregated feedback
+Luma iOS MVP Technical Route (SwiftUI, VoiceOver-First, Build-Ready)
 
-This aligns with your pivot away from expensive custom mapping and toward scalable user-generated value.
+1. Goal and Non-Goals
 
-2. Core System Architecture (High-Level)
-Client (iOS / SwiftUI)
-- Voice-first interface (VoiceOver-native)
-- Minimal gestures, no visual dependency
-- Offline-tolerant caching
-Backend (API + Database)
-- Places & accessibility intelligence
-- Community feedback + trust signals
-- Temporal weighting (recency matters)
-- Moderation + credibility scoring
-AI / Logic Layer (Lightweight, Rule-Based First)
-- Voice-to-text parsing
-- Feedback categorization
-- Summary generation (“What people say about this place”)
+Goal (MVP)
+- Help visually impaired users decide if a place is manageable before they go.
+- Provide recent, spoken community signals on-site without QR codes.
+- Capture voice feedback and convert it to structured reviews with simple rule-based logic.
 
-3. Core User Flows (Rebuilt Without QR Codes)
-3.1 Pre-Visit Decision Flow (Primary Use Case)
-Goal: Help users decide if a place is worth going to.
+Non-Goals (MVP)
+- No indoor turn-by-turn navigation.
+- No custom mapping stack.
+- No AI-heavy moderation or generative pipeline in v1.
+- No venue enterprise dashboard in v1.
 
-User Actions
-Voice input:
+2. Product Constraints to Enforce
 
-“Can I go to X hospital safely?”
-“How accessible is this mall for blind users?”
+- VoiceOver-first: every primary action must be accessible with linear focus navigation and clear spoken labels.
+- Minimal gestures: single tap/select, double tap activate, simple vertical adjust where needed; no gesture-only hidden controls.
+- Usable without looking: each key screen must support full interaction via spoken prompts, haptics, and predictable focus order.
+- No QR dependence: place entry via search, nearby detection, recent list, or voice command.
+- Rule-based first: deterministic parsing/scoring/categorization; AI optional in later phase.
+- Realistic shipping: use Apple-native frameworks and simple backend patterns.
 
-System returns:
-- Ranked place list
-- Spoken summary first, details optional
-- System Output (Very Specific)
+3. MVP Feature Set (Ship This First)
 
-For each place:
-- Overall Accessibility Confidence Score (0–100)
-(Not “rating” — confidence implies uncertainty + evidence)
-- What Works Well (top 2)
-- Common Problems (top 2)
-- Last Community Update (“2 hours ago”)
+- First-launch audio tutorial (voice-guided walkthrough, replayable from Home).
+- Place Search (text + speech input).
+- Place Detail summary:
+  - Accessibility Confidence Score (0-100)
+  - Top 2 “works well”
+  - Top 2 “common problems”
+  - Last update recency
+- Nearby/On-site status via GPS proximity (no geofencing daemon required for v1).
+- Submit Feedback via speech-to-text + rule-based auto-tagging + confirmation step.
+- Recent reviews list prioritized by recency and credibility.
+- Offline read cache for last viewed places + pending review queue.
 
-Who This Place Works For
-- Blind users with cane
-- Wheelchair users
-- Low vision users
+4. System Architecture (Concrete)
 
-Technical Implementation
-- PlaceIndex table with:
-    -Weighted score = Σ(dimension × recency × user credibility)
-- NLP clustering of comments into:
-    - recurring positives
-    - recurring negatives
-- Voice-first summary auto-generated from clusters
+4.1 iOS App (SwiftUI + Native APIs)
+- UI: SwiftUI
+- Accessibility:
+  - VoiceOver labels/hints/traits
+  - `@AccessibilityFocusState` for predictable focus movement
+  - `UIAccessibility.post(notification:.announcement, ...)` for spoken transitions
+- Speech:
+  - iOS Speech framework for dictation-to-text
+  - AVSpeechSynthesizer for optional in-app TTS prompts
+- Location:
+  - CoreLocation standard updates (foreground) for nearby place suggestions
+- Data:
+  - URLSession + async/await
+  - Local persistence: SQLite via GRDB or Core Data (choose one; GRDB is simpler for explicit schema control)
+  - Background sync for queued feedback via BGTaskScheduler (best-effort)
 
-3.2 On-Site Experience Flow (Without QR)
-Goal: Let users quickly understand what others experienced recently at the same place.
+4.2 Backend (Simple, Maintainable)
+- API: REST (FastAPI/Node/Go; pick team’s strongest stack)
+- DB: PostgreSQL
+- Jobs/cron:
+  - Recompute place confidence snapshots every 15 minutes
+  - Recompute summary bullets every 15 minutes
+- Auth: anonymous device token for MVP + optional signed-in account later
+- Observability: request logs, error logging, basic metric counters
 
-Trigger Methods
-- GPS proximity
-- Manual voice command:
-  “I’m inside X mall now”
+5. Data Model (MVP Tables)
 
-System Response
- “Here’s what people reported today at this location:”
-    - Elevator working (confirmed 3 hours ago)
-    - Security desk helpful
-    - Restroom hard to locate
+5.1 `places` (masterlist)
+- `id` (uuid, pk)
+- `name` (text, indexed)
+- `lat` (double coordinates)
+- `lng` (double coordinates)
+- `category` (text) // hospital, mall, transit, etc.
+- `city` (text)
+- `created_at`, `updated_at` (timestamps)
 
-Technical Functions
-- Geo-fenced place detection
-- Time-decayed feedback prioritization
-- Local cache of recent reports (for poor connectivity)
+5.2 `reviews`
+- `id` (uuid, pk)
+- `place_id` (uuid, fk -> places)
+- `user_id` (uuid/hashed device id)
+- `raw_text` (text)
+- `signal_type` (enum): entrance_access, pathway_clarity, stairs_condition, elevator_status, escalator_status, restroom_access, seating_availability, staff_helpfulness, security_helpfulness, queue_manageability, crowding_level, noise_level, lighting_glare, obstacle_hazards, temporary_disruptions, other
+- `rating` (int 1-5) // single rating: 1 very poor, 5 very good
+- `source` (enum): if the review was submitted by voice/text
+- `event_time` (timestamp) // when user says it happened
+- `created_at` (timestamp)
+- `status` (enum): active, flagged, removed
 
-3.3 Real-Time Community Feedback Loop (Core Value)
+5.3 `user_reputation` (MVP decision: enabled in schema, fixed at 1.0)
+- `user_id` (pk)
+- `score` (float 0.5-1.5 default 1.0) //1.0 = normal influence, 1.5 = higher trust, 0.5 = lower trust
+- `reviews_count` (int)
+- `agreement_rate` (float 0-1) // how well their reviews align with others
+- `updated_at`
 
-Feedback Submission (Voice-Only by Default)
-User speaks:
-  “The elevator near the east entrance is broken.”
-System Pipeline
-- Speech → text
-- Auto-tagging:
-    - Facility: elevator
-    - Status: broken
-    - Confidence: high (concrete observation)
-User confirms via voice:
-  “Is this correct?”
-    Stored As
-    Feedback {
-      place_id
-      issue_type
-      severity
-      timestamp
-      confidence_level
-      user_reputation_weight
-    }
+5.4 `place_scores_snapshot` (summary table for each place)
+- `place_id` (pk)
+- `accessibility_score` (int 0-100) // overall score
+- `review_count_30d` (int)
+- `top_positive_json` (jsonb array of strings) //pros about the place
+- `top_negative_json` (jsonb array of strings) //common issues with the place
+- `last_review_at` (timestamp)
+- `computed_at` (timestamp)
 
-Immediate Effects
-- Other users are alerted
-- Place score temporarily adjusted
-- Venue dashboard updated (future phase)
+6. Rule-Based Logic Layer (Deterministic)
 
-4. Accessibility Dimensions (Operationalized)
+6.1 Feedback Auto-Tagging (No LLM)
+- Dictionary + regex approach:
+  - Facility keywords: elevator, lift, restroom, toilet, entrance, escalator, security desk
+  - Rating keywords:
+    - very negative (“broken”, “unsafe”, “blocked”) -> rating 1
+    - negative (“hard to find”, “crowded”, “loud”) -> rating 2
+    - neutral/unclear -> rating 3
+    - positive (“helpful”, “available”, “easy”) -> rating 4
+    - very positive (“excellent”, “always available”, “very helpful”) -> rating 5
 
-Instead of abstract dimensions, each becomes measurable signals.
+6.2 Time Decay + Reputation Weight
+- For each review `r`:
+  - `recency_weight = exp(-hours_since_review / 168)`  // ~7-day half relevance
+  - `credibility_weight = 1.0` for MVP (dynamic reputation weighting disabled in MVP)
+  - `review_weight = recency_weight * credibility_weight`
+- Final place accessibility score:
+  - Weighted average of all review ratings (1-5), then normalize to 0-100
+  - Penalize low evidence:
+    - if review_count_30d < 3, cap at 65 and mark “low confidence”
 
-4.1 Dimensions → Signals
-Navigation Clarity
-- Number of reports mentioning “confusing”
-- Presence of staff assistance reports
+6.3 Summary Generation (Template-Based)
+- No generative AI.
+- Build top bullets from highest weighted active signals:
+  - “works well” from highest weighted ratings (4-5)
+  - “common issues” from lowest weighted ratings (1-2)
+- Spoken summary format:
+  - “Accessibility confidence 72 out of 100. Working well: elevator availability, helpful staff. Common issues: restroom wayfinding, crowding.”
 
-Facility Reliability
-- Elevator uptime (% of last 30 days)
-- Restroom accessibility consistency
+7. API Contract (MVP Endpoints) (backend-to-app agreement for MVP)
 
-Sensory Environment
-- Noise complaints
-- Overcrowding frequency by time of day
+7.1 `GET /v1/places/search?q=<text>&lat=<>&lng=<>`
+- Returns ranked places by name match + optional distance boost.
 
-Staff Responsiveness
-- Mentions of help received
-- Problem resolution follow-ups
+7.2 `GET /v1/places/{place_id}/summary`
+- Returns snapshot:
+  - `accessibility_score`
+  - `top_positive[]`
+  - `top_negative[]`
+  - `last_review_at`
+  - `review_count_30d`
 
-5. Trust, Credibility & Cold-Start Strategy
-5.1 User Credibility Scoring (Internal)
-- Feedback history
-- Consistency with others
-- Time-on-platform
-- Users don’t see a “score” — the system uses it silently.
+7.3 `GET /v1/places/nearby?lat=<>&lng=<>&radius_m=500`
+- Returns nearby places sorted by distance.
 
-5.2 Anti-Misinformation Controls
-- Conflicting reports flagged
-- “Unconfirmed” labels for single reports
-- Automatic decay of old reports
+7.4 `GET /v1/places/{place_id}/reviews?limit=20`
+- Returns recent active reviews with parsed fields.
 
-6. Community Exchange Features (Beyond Reviews)
-6.1 Ask-the-Community
-Users can ask:
-  “Is this hospital manageable alone?”
-Others reply with voice responses.
+7.5 `POST /v1/reviews`
+- Input:
+  - `place_id`
+  - `raw_text`
+  - `event_time`
+  - `source=voice`
+- Server parses/tags and stores.
+- Response includes parsed preview + persisted review id.
 
-6.2 Experience Threads
-Instead of reviews:
-  “My visit today”
-  “What changed since last time”
-These are time-based narratives, not star ratings.
+7.6 `POST /v1/reviews/{id}/confirm`
+- Input: `confirmed=true|false`, optional corrections.
+- If false, allow client to resubmit edited text.
 
-7. Metrics 
-Adoption
-- Monthly active blind users
-- Voice queries per user
-Engagement
-- Feedback submissions per visit
-- Replies to community questions
-Coverage
-- % of key Shanghai venues with ≥5 recent reports
-Impact
-- Reduced “failed trips” (user self-report)
-- Venue response rate (future)
+8. iOS App Structure (Engineer-Ready)
 
-8. MVP Scope (Strict, Buildable)
-- Voice search & summaries
-- Community feedback (voice → structured)
-- Time-weighted accessibility confidence
-- Location-based recent reports
-- VoiceOver-first UX
+8.1 Modules
+- `AppCore` (routing, DI container, shared models)
+- `Features/OnboardingTutorial`
+- `Features/Search`
+- `Features/PlaceDetail`
+- `Features/Nearby`
+- `Features/SubmitReview`
+- `Data/RemoteAPI`
+- `Data/LocalStore`
+- `Domain/RulePresentation` (format spoken summaries, recency phrasing)
+
+8.2 Primary Screens
+- First-Launch Tutorial:
+  - Auto-opens on first app launch before Home
+  - Controls: “Play/Pause”, “Repeat section”, “Skip tutorial”, “Finish”
+  - Completion state is saved; user can replay from Home
+- Launch/Home:
+  - Primary actions as large accessible buttons:
+    - “Search place”
+    - “Nearby places”
+    - “Review current place”
+    - “Play tutorial again”
+- Search screen:
+  - Text field + microphone button
+  - Results list (each row announces name, distance, confidence)
+- Place detail:
+  - Spoken summary on appear (user setting controlled)
+  - Explicit sections with headings for VoiceOver rotor
+- Feedback capture:
+  - Record speech -> transcript preview
+  - “Confirm review” / “Edit text” / “Cancel”
+- Nearby screen:
+  - Foreground location update + list within 500m
+
+8.3 Accessibility Acceptance Rules (Per Screen)
+- All actionable elements have `accessibilityLabel`, `accessibilityHint`, `accessibilitySortPriority`.
+- No action requires drag path precision.
+- First VoiceOver focus lands on screen title.
+- Screen transitions announce completion state.
+- Dynamic type up to accessibility sizes without clipped controls.
+
+8.4 VoiceOver Behavior Spec Per Screen
+- First-Launch Tutorial:
+  - Initial focus: title “Luma audio tutorial”
+  - Announcement on appear: “Welcome to Luma tutorial. Use play, repeat, skip, or finish.”
+- Home:
+  - Initial focus: screen title “Luma Home”
+  - Announcement on appear: “Home. Choose search, nearby, or review current place.”
+- Search:
+  - Initial focus: search input field
+  - Announcement on results loaded: “Found X places.”
+- Place Detail:
+  - Initial focus: place name heading
+  - Announcement on appear: “Accessibility score X out of 100. Swipe right for details.”
+- Review Capture:
+  - Initial focus: “Start voice review” button
+  - Announcement after transcript ready: “Transcript ready. Confirm or edit.”
+- Nearby:
+  - Initial focus: “Nearby places” heading
+  - Announcement on location update: “X nearby places within 500 meters.”
+
+8.5 Screen-by-Screen Acceptance Criteria
+- First-Launch Tutorial:
+  - Loading: tutorial audio loads and announces “Tutorial ready”.
+  - Success: user taps Finish and lands on Home.
+  - Failure: if audio fails, show spoken fallback text and allow Skip/Continue.
+- Home:
+  - Loading: primary buttons disabled until startup checks finish.
+  - Success: all 3 primary actions are reachable and spoken correctly.
+  - Failure: show retry action and announce failure.
+- Search:
+  - Loading: announce “Searching”.
+  - Success: result rows announce place name, distance, and accessibility score.
+  - Failure: announce “Search failed. Try again.”
+- Place Detail:
+  - Loading: announce “Loading place summary”.
+  - Success: score, top positives, top issues, and last review time are present.
+  - Failure: show cached summary if available, else announce no data.
+- Review Capture:
+  - Loading: announce recording/transcribing state changes.
+  - Success: submit review and announce “Review submitted”.
+  - Failure: queue offline and announce “Review queued”.
+- Nearby:
+  - Loading: announce “Finding nearby places”.
+  - Success: list sorted by distance with full VoiceOver labels.
+  - Failure: if location denied, show shortcut to manual search.
+
+9. iOS Local DB Schema (Cache + Outbox)
+
+9.0 `app_settings`
+- `key` (text, pk)
+- `value` (text)
+- Required keys:
+  - `tutorial_completed` = `true|false`
+  - `tutorial_last_played_at` = ISO8601 timestamp
+
+9.1 `cached_place_summaries`
+- `place_id` (text, pk)
+- `place_name` (text)
+- `accessibility_score` (int)
+- `top_positive_json` (text)
+- `top_negative_json` (text)
+- `last_review_at` (text/ISO8601)
+- `review_count_30d` (int)
+- `cached_at` (text/ISO8601)
+
+9.2 `cached_place_reviews`
+- `id` (text, pk)
+- `place_id` (text, indexed)
+- `rating` (int 1-5)
+- `raw_text` (text)
+- `event_time` (text/ISO8601)
+- `cached_at` (text/ISO8601)
+
+9.3 `review_outbox`
+- `local_id` (text, pk)
+- `place_id` (text, indexed)
+- `raw_text` (text)
+- `rating` (int 1-5, nullable if server derives it)
+- `event_time` (text/ISO8601)
+- `attempt_count` (int default 0)
+- `next_retry_at` (text/ISO8601)
+- `created_at` (text/ISO8601)
+- `status` (text): pending, sending, failed
+
+10. iOS Permissions Flow (Microphone, Speech, Location)
+- Microphone denied:
+  - Show “Open Settings” and fallback to typed review entry.
+  - VoiceOver announcement: “Microphone access is off.”
+- Speech recognition denied:
+  - Disable voice transcription and keep typed review entry available.
+  - VoiceOver announcement: “Speech recognition is off.”
+- Location denied:
+  - Nearby screen shows manual search and recent places.
+  - VoiceOver announcement: “Location access is off. Use search instead.”
+- Core rule:
+  - Search and place detail must work even if all permissions are denied.
+
+11. Error and Retry Rules
+
+- Cache:
+  - Last 20 place summaries
+  - Last 50 recent reviews viewed
+- Outbox:
+  - Unsent review queue with retry backoff (30s, 2m, 10m, 30m, 2h)
+- If offline:
+  - User can still read cached summary
+  - User can submit review locally; app announces “Review queued, will send when online”
+- Timeout rules:
+  - Search/summary/reviews reads timeout at 10 seconds.
+  - Review submit timeout at 15 seconds, then move item to outbox.
+- Duplicate handling:
+  - Client sends idempotency key: `device_id + place_id + event_time + raw_text_hash`.
+  - Server returns existing review when same key was already processed.
+- Retry stop condition:
+  - After 10 failed attempts, mark outbox item `failed` and show “Retry now” action.
+
+12. Security and Privacy (MVP-Level)
+
+- No precise movement history stored beyond current request.
+- Hash device identifier before storage.
+- Encrypt transport with HTTPS only.
+- Basic abuse protection:
+  - rate limit review submissions per user/hour
+  - profanity/spam keyword filter
+
+13. Build Plan (5 Weeks, Realistic)
+
+Week 1: Foundations
+- Set up project modules, API client, local DB, base navigation.
+- Implement shared accessibility helpers and spoken announcement utility.
+- Done when: app boots, navigates, and VoiceOver focus order is correct on Home.
+
+Week 2: Search + Place Summary
+- Implement `/places/search` and `/places/{id}/summary`.
+- Build Search and Place Detail screens with spoken summary.
+- Done when: user can search and hear usable summary end-to-end.
+
+Week 3: Feedback Pipeline
+- Implement speech capture -> transcript -> POST review -> confirm flow.
+- Implement server rule-based parser/tagger.
+- Done when: user can submit a voice review in under 30 seconds.
+
+Week 4: Nearby + Recency Feed
+- Implement CoreLocation nearby list and recent reviews view.
+- Add recency phrasing (“2 hours ago”).
+- Done when: on-site flow works with no QR and minimal taps.
+
+Week 5: Scoring + Snapshot Jobs + Hardening
+- Implement score computation job and summary bullet generation.
+- Add low-evidence cap and “low confidence” messaging.
+- Accessibility QA with VoiceOver users/testers.
+- Offline queue tests, error handling, analytics events.
+- Done when: accessibility score updates reflect new reviews within 15 minutes and release checklist passes with stable TestFlight build.
+
+14. QA Checklist (Must Pass Before MVP Release)
+
+- VoiceOver-only journey succeeds for:
+  - Search place
+  - Hear summary
+  - Submit feedback
+  - Check nearby reviews
+- No QR flow required anywhere.
+- No crash during permission denial (location/microphone/speech).
+- Offline review queue survives app restart.
+- Confidence score and summary fields always present (fallback text if low data).
+
+15. Post-MVP (Optional AI Later)
+
+- AI-assisted clustering only after rule-based baseline is stable.
+- AI moderation assist for conflict detection and duplicate merging.
+- Personalized filtering by mobility profile.
+
+16. Immediate Implementation Start (First Tickets)
+
+- Ticket 1: Create SwiftUI app shell + accessibility utilities.
+- Ticket 2: Implement place search API + Search screen.
+- Ticket 3: Implement place summary API + Detail screen with spoken summary.
+- Ticket 4: Implement speech-to-text review submission + confirmation.
+- Ticket 5: Build backend rule parser + review persistence.
+- Ticket 6: Add nearby places screen using CoreLocation foreground updates.
+- Ticket 7: Add local cache + outbox queue + retry worker.

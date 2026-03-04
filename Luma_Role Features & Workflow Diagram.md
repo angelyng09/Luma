@@ -1,0 +1,116 @@
+# Luma Role Features and Flowcharts
+
+## 1. Document Information
+- Document Name: Luma Role Features and Flowcharts
+- Applicable Version: Luma iOS MVP (local demo identity mode)
+- Updated On: 2026-03-01
+
+## 2. Role Definitions
+- Visually Impaired/Low-Vision User Account: Core MVP user role, responsible for search, viewing, and feedback.
+- Venue Maintenance Account: Demo role, responsible for maintaining venue status fields.
+- Community Management Account: Demo role, responsible for managing the status of community feedback content.
+
+## 3. Role Feature List
+
+| Feature Module | Visually Impaired/Low-Vision User Account | Venue Maintenance Account | Community Management Account |
+|---|---|---|---|
+| Role Switching | Supported | Supported | Supported |
+| First-Time Tutorial Playback | Supported | Supported | Supported |
+| Place Search (Text/Voice) | Supported | Supported | Supported |
+| View Place Summary | Supported | Supported | Supported |
+| View Recent Reviews | Supported | Supported | Supported |
+| Submit Voice Feedback | Supported | Supported | Not Supported |
+| View Nearby Places | Supported | Supported | Supported |
+| Maintain Venue Status (facility availability, temporary issues) | Not Supported | Supported | Read-only |
+| Community Feedback Management (flag/hide/restore) | Not Supported | Read-only | Supported |
+| Local Data Management (restore test data/clear cache) | Read-only | Supported | Supported |
+
+## 4. Global Flowchart (Role Switching + Permission Routing)
+
+```mermaid
+flowchart TD
+    A[Launch App] --> B[Read Local Demo Identity]
+    B --> C{Role Already Selected?}
+    C -- No --> D[Enter Role Selection]
+    C -- Yes --> E[Enter Home]
+    D --> E
+
+    E --> F{Current Role}
+    F -- Visually Impaired/Low-Vision User --> U1[Show User Main Entry]
+    F -- Venue Maintenance --> M1[Show Maintenance Main Entry]
+    F -- Community Management --> G1[Show Management Main Entry]
+
+    U1 --> H[Run Search/Nearby/Feedback Flows]
+    M1 --> I[Run Venue Status Maintenance Flow]
+    G1 --> J[Run Community Content Management Flow]
+
+    H --> K[Persist to Local Database]
+    I --> K
+    J --> K
+    K --> L[Refresh Local Summaries and Lists]
+```
+
+## 5. Visually Impaired/Low-Vision User Flowchart
+
+```mermaid
+flowchart TD
+    A[Switch Role to Visually Impaired/Low-Vision User] --> B[Home]
+    B --> C{Select Entry}
+    C -- Search Place --> D[Enter Keywords by Text/Voice]
+    C -- Nearby Places --> E[Request Location and Show Nearby List]
+    C -- Review Current Place --> F[Start Voice Feedback]
+
+    D --> G[View Candidate Results]
+    G --> H[Enter Place Detail]
+    E --> H
+    H --> I[Read Summary: Score/Strengths/Issues/Updated Time]
+
+    F --> J[Voice Transcription]
+    J --> K[Rule Parsing: Signal Type/Suggested Score]
+    K --> L[User Confirms or Edits]
+    L --> M[Save Feedback Locally]
+    M --> N[Refresh Place Summary Immediately]
+```
+
+## 6. Venue Maintenance Account Flowchart
+
+```mermaid
+flowchart TD
+    A[Switch Role to Venue Maintenance] --> B[Enter Venue Maintenance Entry]
+    B --> C[Select Target Venue]
+    C --> D[Edit Status Fields]
+    D --> E[Update Facility Availability]
+    D --> F[Update Temporary Issue Flags]
+    E --> G[Save to Local Database]
+    F --> G
+    G --> H[Trigger Local Summary Recalculation]
+    H --> I[Frontend Detail Page Shows Latest Status]
+```
+
+## 7. Community Management Account Flowchart
+
+```mermaid
+flowchart TD
+    A[Switch Role to Community Management] --> B[Enter Community Management Entry]
+    B --> C[View Feedback List]
+    C --> D{Choose Management Action}
+    D -- Flag --> E[Set flagged]
+    D -- Hide --> F[Set hidden]
+    D -- Restore --> G[Restore active]
+    E --> H[Write Local Management Record]
+    F --> H
+    G --> H
+    H --> I[Refresh Community List and Place Summary]
+```
+
+## 8. Key Interaction and Permission Rules
+- Permissions take effect immediately after role switching, and do not trigger real login/authentication.
+- Visible page does not mean executable actions: roles without permission are read-only and cannot submit changes.
+- All key state transitions (save success, insufficient permissions, operation failure) require voice announcements.
+- All role flows are based on local test data and local database only, with no backend dependency.
+
+## 9. Review and Acceptance Recommendations
+- Verify whether three-role switching takes effect immediately (page entries, button executability changes).
+- Verify that "read-only roles" cannot perform restricted actions.
+- Verify that local data and UI state remain consistent after actions by all three roles.
+- Verify under VoiceOver that the role-switch entry and key buttons are fully operable.

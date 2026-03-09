@@ -3,8 +3,8 @@
 ## 1. Document Information
 - Document Name: Luma UI Detailed Pagination Design (Text Version)
 - Applicable Version: Luma iOS MVP (local demo identities)
-- Updated On: 2026-03-01
-- Design Principles: VoiceOver-first, low interaction cost, local data closed loop
+- Updated On: 2026-03-09
+- Design Principles: VoiceOver-first, low interaction cost, shared data + offline fallback loop
 
 ## 2. Global Design Guidelines
 
@@ -30,6 +30,25 @@ Each page follows the same structure:
 - Recommended list row height: >= 56pt.
 - Title/body contrast must meet WCAG AA.
 - Support Dynamic Type up to Accessibility Large.
+
+### 2.5 Global Scoring Rule Binding (MVP)
+- Each place has a backend summary with:
+  - `accessibility_score`
+  - `review_count_30d`
+  - top positive points and top issues
+  - update timestamps
+- The app always shows score as a whole number from `0` to `100`.
+- Scoring behavior:
+  - Newer reviews count more than older reviews.
+  - Review ratings are combined into one average, then converted to `0-100`.
+  - If active reviews in the last 30 days are fewer than `3`, cap score at `65` and show `Low confidence`.
+- Review eligibility:
+  - Include only `active` reviews.
+  - Exclude `flagged` and `removed` reviews.
+- Refresh timing:
+  - Recompute after a user confirms a review.
+  - Also recompute every 15 minutes as fallback.
+- If valid data is missing or very limited, show a neutral score with caution messaging.
 
 ## 3. Page List (by Priority)
 
@@ -133,7 +152,7 @@ Each page follows the same structure:
 **Acceptance Checks**
 - Users can complete role selection and enter Home in <= 2 interactions after selection.
 - Role change takes effect immediately on Home (visible entry points and executable actions update).
-- No real login/authentication screens or API calls are triggered.
+- No real login/authentication screens or auth API calls are triggered.
 - VoiceOver can complete the full flow without requiring custom gestures.
 
 ---
@@ -199,7 +218,7 @@ Each page follows the same structure:
 5. Recent searches (up to 5)
 
 **Key Interactions**
-- Trigger local search after entering keywords.
+- Trigger backend search request after entering keywords (fall back to local cache when needed).
 - Tap a recent search to reuse keywords in one step.
 
 **State Design**
@@ -224,6 +243,7 @@ Each page follows the same structure:
    - Place name
    - Distance
    - Accessibility score
+   - Optional confidence tag (`Low confidence` when evidence is limited)
    - Latest update time
 3. Sorting control: `Distance First` / `Score First`
 
@@ -232,7 +252,7 @@ Each page follows the same structure:
 - Adjust sorting to refresh list order instantly.
 
 **VoiceOver Design**
-- Row readout template: `{place name}, distance {x} meters, score {y}, double-tap for details.`
+- Row readout template: `{place name}, distance {x} meters, score {y}, {confidence state if any}, double-tap for details.`
 
 ---
 
@@ -255,13 +275,27 @@ Each page follows the same structure:
 - Tap "Review Current Place" to enter Review Capture.
 - Tap "View Recent Reviews" to enter the review list.
 
+**Data and Rule Binding**
+- Read summary from snapshot fields:
+  - `accessibility_score` (0-100)
+  - `review_count_30d`
+  - `top_positive_json` (Top 2)
+  - `top_negative_json` (Top 2)
+  - `last_review_at`
+- Confidence display rule:
+  - If `review_count_30d < 3`, append `Low confidence` and keep caution copy visible.
+- Do not show separate scores by role; all roles read the same place-level score output.
+
 **State Design**
 - Loading: `Loading place summary`.
 - Missing data: Show fallback text `Current data is limited. Please reference with caution`.
+- Low confidence: Show score with inline note `Low confidence: based on limited recent reviews`.
+- Score refresh pending (after submit): keep last snapshot visible and show `Updating latest community signal`.
 
 **VoiceOver Design**
 - First focus: Place title.
 - Entry announcement: `Accessibility score X out of 100. Swipe right for details.`
+- If low confidence: append `Low confidence due to limited recent reviews.`
 
 ---
 
@@ -303,14 +337,18 @@ Each page follows the same structure:
 4. Button group: `Confirm Save`, `Back to Edit`, `Cancel`
 
 **Key Interactions**
-- Tap "Confirm Save" to write to local database and return to Place Detail.
+- Tap "Confirm Save" to submit review to backend and return to Place Detail.
+- If offline or request fails, queue review locally and retry in background.
+- On successful submit, trigger score/summary recompute for that place.
 
 **State Design**
 - Save success: Toast + voice announcement.
 - Save failed: Error prompt + retry.
+- Save success but summary recompute pending: return to Place Detail with previous snapshot and loading hint for refreshed score.
 
 **VoiceOver Design**
-- Success announcement: `Review saved locally`.
+- Success announcement: `Review submitted`.
+- Offline queued announcement: `Review queued. It will send when connection is available.`
 
 ---
 
@@ -321,7 +359,7 @@ Each page follows the same structure:
 **Layout Structure**
 1. Title: `Nearby Places`
 2. Status bar: Location permission and current position status
-3. Nearby list (500m): Place name, distance, score
+3. Nearby list (500m): Place name, distance, score, optional `Low confidence` tag
 4. Permission-denied fallback area: Manual search entry
 
 **Key Interactions**
@@ -381,14 +419,15 @@ Each page follows the same structure:
 
 ## 4.12 Local Data Tools Page (Local Data Tools)
 **Page Goal**
-- Support quick local-data reset during review and integration testing.
+- Support quick cache/outbox diagnostics and recovery during review and integration testing.
 
 **Layout Structure**
 1. Title: `Local Data Tools`
 2. Action buttons:
-   - Restore built-in test data
-   - Clear cache
-   - View database status
+   - Refresh from server
+   - Clear local cache
+   - Retry queued submissions
+   - View sync status
 
 **Permission Rules**
 - Venue maintenance and community management can execute.

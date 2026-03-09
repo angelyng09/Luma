@@ -81,10 +81,14 @@ Non-Goals (MVP)
 - `raw_text` (text)
 - `signal_type` (enum): entrance_access, pathway_clarity, stairs_condition, elevator_status, escalator_status, restroom_access, seating_availability, staff_helpfulness, security_helpfulness, queue_manageability, crowding_level, noise_level, lighting_glare, obstacle_hazards, temporary_disruptions, other
 - `rating` (int 1-5) // single rating: 1 very poor, 5 very good
-- `source` (enum): if the review was submitted by voice/text
+- `source` (enum): voice, text
 - `event_time` (timestamp) // when user says it happened
 - `created_at` (timestamp)
-- `status` (enum): active, flagged, removed
+- `confirmed` (bool default false)
+- `confirmed_at` (timestamp, nullable)
+- `status` (enum): active, flagged, hidden, removed
+- `moderation_reason` (text, nullable)
+- `last_moderated_at` (timestamp, nullable)
 
 5.3 `user_reputation` (MVP decision: enabled in schema, fixed at 1.0)
 - `user_id` (pk)
@@ -97,10 +101,35 @@ Non-Goals (MVP)
 - `place_id` (pk)
 - `accessibility_score` (int 0-100) // overall score
 - `review_count_30d` (int)
+- `low_confidence` (bool)
 - `top_positive_json` (jsonb array of strings) //pros about the place
 - `top_negative_json` (jsonb array of strings) //common issues with the place
 - `last_review_at` (timestamp)
+- `last_venue_update_at` (timestamp, nullable)
 - `computed_at` (timestamp)
+
+5.5 `venue_status_updates` (role feature support: FR-10)
+- `id` (uuid, pk)
+- `place_id` (uuid, fk -> places, indexed)
+- `actor_user_id` (uuid/hashed device id)
+- `actor_role` (enum): venue_maintenance, community_management, admin
+- `elevator_status` (enum): available, unavailable, unknown
+- `restroom_access` (enum): normal, limited, unavailable, unknown
+- `temporary_issue_flag` (bool)
+- `temporary_issue_note` (text, nullable)
+- `event_time` (timestamp)
+- `created_at` (timestamp)
+- `status` (enum): active, superseded
+
+5.6 `review_moderation_actions` (role feature support: FR-11)
+- `id` (uuid, pk)
+- `review_id` (uuid, fk -> reviews, indexed)
+- `place_id` (uuid, fk -> places, indexed)
+- `actor_user_id` (uuid/hashed device id)
+- `actor_role` (enum): community_management, admin
+- `action` (enum): flag, hide, restore, remove
+- `reason` (text, nullable)
+- `created_at` (timestamp)
 
 6. Rule-Based Logic Layer (Deterministic)
 
@@ -114,15 +143,66 @@ Non-Goals (MVP)
     - positive (“helpful”, “available”, “easy”) -> rating 4
     - very positive (“excellent”, “always available”, “very helpful”) -> rating 5
 
-6.2 Time Decay + Reputation Weight
-- For each review `r`:
-  - `recency_weight = exp(-hours_since_review / 168)`  // ~7-day half relevance
-  - `credibility_weight = 1.0` for MVP (dynamic reputation weighting disabled in MVP)
-  - `review_weight = recency_weight * credibility_weight`
-- Final place accessibility score:
-  - Weighted average of all review ratings (1-5), then normalize to 0-100
-  - Penalize low evidence:
-    - if review_count_30d < 3, cap at 65 and mark “low confidence”
+6.2 General Scoring Rules (Detailed, MVP Baseline)
+- Objective:
+  - Produce one deterministic `accessibility_score` (0-100) per place that reflects recent accessibility conditions more than old reports.
+- Scope of data included:
+  - Include only reviews with `status=active` and `confirmed=true`.
+  - Use `event_time` as the time reference for freshness (not `created_at`).
+  - Ignore `flagged`, `hidden`, and `removed` reviews from scoring and summary generation.
+
+- Step A: Per-review weight calculation
+  - For each eligible review `r`:
+    - `hours_since_review = max(0, hours_between(now_utc, r.event_time))`
+    - `recency_weight = exp(-hours_since_review / 168)`  // 168h = 7 days decay constant
+    - `credibility_weight = 1.0` for MVP (dynamic reputation weighting intentionally disabled)
+    - `review_weight = recency_weight * credibility_weight`
+  - Interpretation:
+    - A very recent review has weight close to 1.0.
+    - Older reviews are still considered but decay smoothly toward 0.
+
+- Step B: Weighted average on rating scale (1-5)
+  - `weighted_sum = sum(r.rating * review_weight)`
+  - `weight_total = sum(review_weight)`
+  - If `weight_total > 0`:
+    - `weighted_rating_1_to_5 = weighted_sum / weight_total`
+  - If `weight_total == 0` (no eligible reviews):
+    - Set `weighted_rating_1_to_5 = 3.0` (neutral fallback for stable UI output).
+
+- Step C: Normalize to 0-100 score
+  - `raw_score = ((weighted_rating_1_to_5 - 1.0) / 4.0) * 100.0`
+  - `normalized_score = clamp(round(raw_score), 0, 100)`
+
+- Step D: Low-evidence penalty (general trust rule)
+  - `review_count_30d = count(active and confirmed reviews where event_time >= now_utc - 30 days)`
+  - If `review_count_30d < 3`:
+    - `accessibility_score = min(normalized_score, 65)`
+    - Mark place as `low_confidence` for UI messaging.
+  - Else:
+    - `accessibility_score = normalized_score`
+
+- Step E: Summary extraction from the same weighted set
+  - Build “works well” from highest weighted items where `rating in [4,5]`.
+  - Build “common issues” from highest weighted items where `rating in [1,2]`.
+  - Keep top 2 items per side for concise VoiceOver output.
+
+- Step F: Snapshot persistence and freshness
+  - Persist to `place_scores_snapshot`:
+    - `accessibility_score`
+    - `review_count_30d`
+    - `low_confidence`
+    - `top_positive_json`
+    - `top_negative_json`
+    - `last_review_at`
+    - `last_venue_update_at`
+    - `computed_at`
+  - Recompute trigger policy:
+    - Event-driven recompute after review confirm/save.
+    - Scheduled recompute every 15 minutes as consistency backstop.
+
+- Determinism requirements:
+  - Same input dataset and same `now_utc` reference must always produce the same output.
+  - No generative model influence is allowed in scoring path for MVP.
 
 6.3 Summary Generation (Template-Based)
 - No generative AI.
@@ -134,35 +214,193 @@ Non-Goals (MVP)
 
 7. API Contract (MVP Endpoints) (backend-to-app agreement for MVP)
 
-7.1 `GET /v1/places/search?q=<text>&lat=<>&lng=<>`
-- Returns ranked places by name match + optional distance boost.
+7.0 Shared Contract Rules
+- Base path: `/v1`
+- Content type: `application/json; charset=utf-8`
+- Timestamp format: RFC3339 UTC (example: `2026-03-09T18:30:00Z`)
+- Authentication headers:
+  - `Authorization: Bearer <anonymous_device_token>`
+  - `X-Role: user | venue_maintenance | community_management | admin`
+- Idempotency for write operations:
+  - Header: `Idempotency-Key: <device_id+place_id+event_time+raw_text_hash>`
+  - Required on `POST/PATCH` endpoints that mutate data.
+- Pagination:
+  - Cursor-based for list endpoints.
+  - Query params: `limit` (default 20, max 100), `cursor` (opaque token).
+  - Response `meta`: `{ "next_cursor": "..." | null }`
+- Standard error envelope:
+  - `{ "error": { "code": "<STRING_CODE>", "message": "<human readable>", "details": { ... } } }`
+- Standard HTTP status usage:
+  - `200` success read/update, `201` created, `400` validation error, `401` unauthorized, `403` forbidden, `404` not found, `409` conflict, `422` semantic validation, `429` rate limited, `500` server error.
+
+7.1 `GET /v1/places/search`
+- Query params:
+  - `q` (string, required, 2-80 chars)
+  - `lat` (float, optional)
+  - `lng` (float, optional)
+  - `radius_m` (int, optional, default 2000, min 100, max 5000)
+  - `sort` (enum, optional): relevance, distance, score (default relevance)
+  - `limit` (int, optional), `cursor` (string, optional)
+- Response `200`:
+  - `data.items[]`:
+    - `place_id` (uuid)
+    - `name` (string)
+    - `distance_m` (int, nullable when lat/lng absent)
+    - `accessibility_score` (int 0-100)
+    - `low_confidence` (bool)
+    - `review_count_30d` (int)
+    - `last_review_at` (timestamp, nullable)
+  - `meta.next_cursor` (string|null)
+- Errors:
+  - `400 INVALID_QUERY`, `401 UNAUTHORIZED`, `429 RATE_LIMITED`, `500 INTERNAL_ERROR`
 
 7.2 `GET /v1/places/{place_id}/summary`
-- Returns snapshot:
-  - `accessibility_score`
-  - `top_positive[]`
-  - `top_negative[]`
-  - `last_review_at`
-  - `review_count_30d`
+- Path params:
+  - `place_id` (uuid, required)
+- Response `200`:
+  - `data`:
+    - `place_id` (uuid)
+    - `name` (string)
+    - `accessibility_score` (int 0-100)
+    - `low_confidence` (bool)
+    - `review_count_30d` (int)
+    - `top_positive` (array<string>, max 2)
+    - `top_negative` (array<string>, max 2)
+    - `last_review_at` (timestamp, nullable)
+    - `last_venue_update_at` (timestamp, nullable)
+    - `computed_at` (timestamp)
+- Errors:
+  - `400 INVALID_PLACE_ID`, `401 UNAUTHORIZED`, `404 PLACE_NOT_FOUND`, `500 INTERNAL_ERROR`
 
-7.3 `GET /v1/places/nearby?lat=<>&lng=<>&radius_m=500`
-- Returns nearby places sorted by distance.
+7.3 `GET /v1/places/nearby`
+- Query params:
+  - `lat` (float, required)
+  - `lng` (float, required)
+  - `radius_m` (int, optional, default 500, min 100, max 2000)
+  - `limit` (int, optional), `cursor` (string, optional)
+- Response `200`:
+  - `data.items[]`: same shape as search result item
+  - `meta.next_cursor` (string|null)
+- Errors:
+  - `400 INVALID_COORDINATES`, `401 UNAUTHORIZED`, `429 RATE_LIMITED`, `500 INTERNAL_ERROR`
 
-7.4 `GET /v1/places/{place_id}/reviews?limit=20`
-- Returns recent active reviews with parsed fields.
+7.4 `GET /v1/places/{place_id}/reviews`
+- Query params:
+  - `limit` (int, optional, default 20, max 100)
+  - `cursor` (string, optional)
+  - `status` (enum, optional): active, flagged, hidden, removed, all (default active)
+  - `signal_type` (enum, optional)
+  - `from` (timestamp, optional)
+  - `to` (timestamp, optional)
+- Permission rule:
+  - `user` role can request only `status=active`.
+  - moderation roles can request all statuses.
+- Response `200`:
+  - `data.items[]`:
+    - `review_id` (uuid)
+    - `place_id` (uuid)
+    - `raw_text` (string)
+    - `signal_type` (enum)
+    - `rating` (int 1-5)
+    - `source` (enum: voice|text)
+    - `event_time` (timestamp)
+    - `status` (enum)
+    - `confirmed` (bool)
+    - `created_at` (timestamp)
+  - `meta.next_cursor` (string|null)
+- Errors:
+  - `400 INVALID_FILTER`, `401 UNAUTHORIZED`, `403 FORBIDDEN_STATUS_SCOPE`, `404 PLACE_NOT_FOUND`, `500 INTERNAL_ERROR`
 
 7.5 `POST /v1/reviews`
-- Input:
-  - `place_id`
-  - `raw_text`
-  - `event_time`
-  - `source=voice`
-- Server parses/tags and stores.
-- Response includes parsed preview + persisted review id.
+- Headers:
+  - `Authorization`, `X-Role`, `Idempotency-Key` (required)
+- Body:
+  - `place_id` (uuid, required)
+  - `raw_text` (string, required, 1-2000 chars)
+  - `event_time` (timestamp, required)
+  - `source` (enum, required): voice, text
+- Behavior:
+  - Server parses signal type + suggested score.
+  - Persists review with `confirmed=false` and `status=active`.
+- Response `201`:
+  - `data`:
+    - `review_id` (uuid)
+    - `place_id` (uuid)
+    - `signal_type` (enum)
+    - `suggested_rating` (int 1-5)
+    - `confirmed` (bool=false)
+    - `status` (enum=active)
+    - `created_at` (timestamp)
+- Errors:
+  - `400 INVALID_BODY`, `401 UNAUTHORIZED`, `404 PLACE_NOT_FOUND`, `409 DUPLICATE_IDEMPOTENCY_KEY`, `422 REVIEW_TOO_LONG_OR_INVALID_TIME`, `500 INTERNAL_ERROR`
 
 7.6 `POST /v1/reviews/{id}/confirm`
-- Input: `confirmed=true|false`, optional corrections.
-- If false, allow client to resubmit edited text.
+- Headers:
+  - `Authorization`, `X-Role`, `Idempotency-Key` (required)
+- Body:
+  - `confirmed` (bool, required)
+  - `raw_text` (string, optional correction if user edited)
+  - `signal_type` (enum, optional correction)
+  - `rating` (int 1-5, optional correction)
+- Behavior:
+  - If `confirmed=true`, set `confirmed=true`, set `confirmed_at`, and trigger recompute job for place snapshot.
+  - If `confirmed=false`, keep review unconfirmed (or delete by policy) and allow client resubmission path.
+- Response `200`:
+  - `data`:
+    - `review_id` (uuid)
+    - `confirmed` (bool)
+    - `status` (enum)
+    - `recompute_enqueued` (bool)
+- Errors:
+  - `400 INVALID_CONFIRM_PAYLOAD`, `401 UNAUTHORIZED`, `403 FORBIDDEN`, `404 REVIEW_NOT_FOUND`, `409 REVIEW_ALREADY_CONFIRMED`, `500 INTERNAL_ERROR`
+
+7.7 `PATCH /v1/places/{place_id}/venue-status` (FR-10 support)
+- Permission:
+  - Allowed roles: `venue_maintenance`, `admin`
+- Headers:
+  - `Authorization`, `X-Role`, `Idempotency-Key` (required)
+- Body:
+  - `elevator_status` (enum): available, unavailable, unknown
+  - `restroom_access` (enum): normal, limited, unavailable, unknown
+  - `temporary_issue_flag` (bool)
+  - `temporary_issue_note` (string, optional, max 500)
+  - `event_time` (timestamp, required)
+- Behavior:
+  - Persist to `venue_status_updates`.
+  - Trigger summary recompute.
+- Response `200`:
+  - `data`:
+    - `update_id` (uuid)
+    - `place_id` (uuid)
+    - `last_venue_update_at` (timestamp)
+    - `recompute_enqueued` (bool)
+- Errors:
+  - `400 INVALID_VENUE_STATUS`, `401 UNAUTHORIZED`, `403 FORBIDDEN_ROLE`, `404 PLACE_NOT_FOUND`, `500 INTERNAL_ERROR`
+
+7.8 `POST /v1/reviews/{id}/moderation` (FR-11 support)
+- Permission:
+  - Allowed roles: `community_management`, `admin`
+- Headers:
+  - `Authorization`, `X-Role`, `Idempotency-Key` (required)
+- Body:
+  - `action` (enum, required): flag, hide, restore, remove
+  - `reason` (string, optional, max 500)
+- Behavior:
+  - Write action record to `review_moderation_actions`.
+  - Apply review status mapping:
+    - `flag` -> `flagged`
+    - `hide` -> `hidden`
+    - `restore` -> `active`
+    - `remove` -> `removed`
+  - Trigger summary recompute when final status affects scoring visibility.
+- Response `200`:
+  - `data`:
+    - `review_id` (uuid)
+    - `new_status` (enum)
+    - `action_id` (uuid)
+    - `recompute_enqueued` (bool)
+- Errors:
+  - `400 INVALID_MODERATION_ACTION`, `401 UNAUTHORIZED`, `403 FORBIDDEN_ROLE`, `404 REVIEW_NOT_FOUND`, `409 INVALID_STATUS_TRANSITION`, `500 INTERNAL_ERROR`
 
 8. iOS App Structure (Engineer-Ready)
 

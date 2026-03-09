@@ -4,7 +4,7 @@
 - Document Name: Luma MVP Requirements Analysis Document
 - Scope: iOS MVP (SwiftUI, VoiceOver first)
 - Document Version: v1.0
-- Updated On: 2026-03-01
+- Updated On: 2026-03-09
 - Status: Review Draft
 
 ## 2. Background and Problem Definition
@@ -48,7 +48,7 @@ Therefore, Luma MVP is not a traditional "navigation product" or "review product
 - Decision efficiency: From opening the app to receiving the place summary, P50 <= 20 seconds.
 - Feedback efficiency: From start of recording to submission completion, P50 <= 30 seconds.
 - Stability: Crash rate in core flows < 0.5%.
-- Data freshness: New local feedback is reflected in place summaries within 5 seconds after submission.
+- Data freshness: New confirmed feedback is reflected in place summaries within 15 minutes.
 
 ## 4. Target Users and Roles
 
@@ -59,14 +59,14 @@ Therefore, Luma MVP is not a traditional "navigation product" or "review product
 
 ### 4.2 Account Implementation Strategy (MVP)
 - All three account types use local demo identities (preset accounts + local role switching).
-- No real login integration, password system, server token, or cross-device account sync.
+- No real login integration, password system, or user-facing account registration flows.
 - Core flows for the visually impaired/low-vision role must be truly usable (search, summary, nearby, feedback).
 - Venue maintenance and community management roles are used for review demos of permissions and workflows, not as live operations systems.
 
 ### 4.3 Role Permission Boundaries (MVP)
 - Visually impaired/low-vision user account: Can use tutorial, search, place details, nearby places, voice feedback, and recent reviews.
-- Venue maintenance account: Can maintain venue status fields in local data (for example facility availability and temporary issue markers).
-- Community management account: Can perform content management actions on local data (flag, hide, restore community feedback).
+- Venue maintenance account: Can maintain venue status fields in shared system data (for example facility availability and temporary issue markers).
+- Community management account: Can perform content management actions in shared system data (flag, hide, restore community feedback).
 
 ### 4.4 Usage Environment Characteristics
 - High noise, unstable network, one-handed operation, and inability to continuously stare at the screen.
@@ -82,14 +82,14 @@ Notes:
 | Role switching | Switch current demo identity | ✅ | ✅ | ✅ | Takes effect immediately in local session, no login authentication triggered |
 | First-time tutorial | Play/Pause/Skip/Complete | ✅ | ✅ | ✅ | All three roles can demo accessibility flow |
 | Home | Enter Search/Nearby/Feedback/Tutorial | ✅ | ✅ | ✅ | Same home entry points; downstream permissions are role-controlled |
-| Place search | Search places by text/voice | ✅ | ✅ | ✅ | Unified local test data |
+| Place search | Search places by text/voice | ✅ | ✅ | ✅ | Unified backend data with local cache fallback |
 | Place details | View score, pros/cons, update time | ✅ | ✅ | ✅ | Readable by default for all roles |
 | Recent reviews list | Browse recent reviews | ✅ | ✅ | ✅ | Readable by default for all roles |
 | Voice feedback | Create and save feedback | ✅ | ✅ | ❌ | Community management role does not participate in normal feedback submission |
 | Nearby places | Use location to view nearby places | ✅ | ✅ | ✅ | Affected by location permission; fallback path when denied |
 | Venue status maintenance | Modify facility status/temporary issue marker | ❌ | ✅ | Read-only | Only venue maintenance role can save changes |
 | Community content management | Flag/Hide/Restore feedback | ❌ | Read-only | ✅ | Only community management role can execute management actions |
-| Local data management | Restore built-in test data/Clear local cache | Read-only | ✅ | ✅ | For demo efficiency, maintenance and management roles may execute |
+| Local data management | Refresh from server/Clear cache/Retry outbox | Read-only | ✅ | ✅ | For demo efficiency, maintenance and management roles may execute |
 
 ## 5. Core User Scenarios
 
@@ -100,7 +100,7 @@ The user finds a place through search (text or voice), listens to summary inform
 The user uses "Nearby Places" to check relevant venues at the current location and quickly obtains recent accessibility status.
 
 ### Scenario C: On-site feedback return
-The user submits on-site observations via voice. The system auto-parses and provides confirmation. After success, data is written locally and becomes immediately visible.
+The user submits on-site observations via voice. The system auto-parses and provides confirmation. After success, data is submitted to backend services (or queued locally when offline), then reflected in shared summaries.
 
 ## 6. Scope Definition (MVP)
 
@@ -111,7 +111,7 @@ The user submits on-site observations via voice. The system auto-parses and prov
 - Nearby places list (foreground location).
 - Voice feedback submission (transcription, auto-tagging, confirmation).
 - Recent reviews list (prioritized by recency and confidence).
-- Local test data management and local persistent storage.
+- Backend API integration with local cache/outbox persistence.
 - Three local demo roles, role switching, and permission toggles.
 
 ### 6.2 Out of Scope
@@ -157,7 +157,7 @@ Acceptance Criteria:
 - Support text-input search.
 - Support voice input and text conversion for search.
 - Search results display name, distance, and confidence score.
-- Search data source is local test dataset (no backend dependency in MVP).
+- Search data source is backend search API, with local cache fallback when unavailable.
 
 Acceptance Criteria:
 - During search, announce "Searching".
@@ -168,7 +168,7 @@ Acceptance Criteria:
 - Display accessibility score (0-100).
 - Display Top 2 positive signals and Top 2 negative signals.
 - Display latest update time and review count in the last 30 days.
-- Summary is calculated in real time from locally stored reviews or read from a local snapshot.
+- Summary is read from backend-computed snapshot with local cache fallback.
 
 Acceptance Criteria:
 - Page must include four categories: score, strengths, issues, update time.
@@ -181,7 +181,7 @@ Acceptance Criteria:
 
 Acceptance Criteria:
 - After transcription completes, announce "Transcript ready. Confirm or edit.".
-- On successful local save, announce "Review saved locally".
+- On successful submit, announce "Review submitted".
 - After save, place summary page reflects data changes caused by this feedback.
 
 ### FR-06 Nearby places
@@ -194,15 +194,15 @@ Acceptance Criteria:
 - After location update, announce "X nearby places within 500 meters.".
 - If location permission is denied, prompt "Location access is off. Use search instead.".
 
-### FR-07 Local cache and persistence
+### FR-07 Offline cache, outbox, and persistence
 - Cache recently viewed place summaries and reviews.
-- After voice feedback confirmation, write to local persistent storage.
+- After voice feedback confirmation, submit to backend; if submission fails, queue in local outbox for retry.
 - Local history and states can be restored after app restart.
 
 Acceptance Criteria:
-- Offline does not affect search, details, and feedback save.
-- After restart, recently viewed history and saved feedback remain readable.
-- After local data cleanup, built-in test data can be restored with one tap.
+- Offline does not block reading cached summaries/details and queueing feedback.
+- After restart, recently viewed history and queued feedback remain readable/retryable.
+- Outbox retry and failure states are visible and actionable.
 
 ## P1 (Should-have)
 
@@ -222,16 +222,16 @@ Acceptance Criteria:
 - If location is denied, nearby page provides an executable alternative path.
 
 ### FR-10 Venue maintenance role demo capability
-- Venue maintenance account can modify local venue-status-related fields.
-- After changes, place detail summary reflects updates locally in real time.
+- Venue maintenance account can modify venue-status-related fields through backend APIs.
+- After changes, place detail summary reflects backend-updated status and timestamp.
 
 Acceptance Criteria:
 - Venue maintenance role can complete the loop: "modify status -> save -> visible on frontend".
 - Non-venue-maintenance roles cannot access this maintenance entry.
 
 ### FR-11 Community management role demo capability
-- Community management account can flag, hide, and restore local community feedback.
-- Management actions must keep local operation timestamp records.
+- Community management account can flag, hide, and restore community feedback through backend APIs.
+- Management actions must keep operation timestamp records.
 
 Acceptance Criteria:
 - Community management role can complete flag/hide/restore actions and take effect immediately.
@@ -265,25 +265,26 @@ Acceptance Criteria:
 ## 10. Non-Functional Requirements
 
 ### 10.1 Performance
-- Local search response time P95 <= 1 second.
-- Local summary calculation and rendering time P95 <= 1.5 seconds.
+- Search API response + render time P95 <= 1.5 seconds on stable network.
+- Summary fetch (or cache fallback render) time P95 <= 1.5 seconds.
 - First-screen interactive time (cold start) recommended <= 2.5 seconds.
 
 ### 10.2 Reliability
-- Core flows must run end-to-end without network.
+- Core read flows must degrade gracefully under network loss using cached data.
+- Feedback submission must support offline outbox + retry until success or terminal failure.
 - If local database errors occur, provide recoverable degraded prompts and rebuild capability.
 
 ### 10.3 Security and Privacy
 - Do not store precise movement trajectory history.
-- Voice transcription content is only used for local display and local rule calculation, and is not uploaded to external services (MVP phase).
+- Voice transcription content is only sent to Luma first-party backend services for product processing; it is not sent to third-party external services.
 
 ### 10.4 Observability
-- Must log local search latency, summary calculation latency, and feedback save success rate.
+- Must log client-side and server-side search latency, summary latency, and feedback submit success rate.
 - Must log key accessibility events (announcement trigger, abnormal focus landing).
 
 ## 11. External Dependencies and Constraints
 - iOS system capabilities: VoiceOver, Speech, CoreLocation, BackgroundTasks.
-- Data strategy: MVP uses local test data (JSON/SQLite); no backend interfaces or service deployment.
+- Data strategy: MVP uses backend APIs + PostgreSQL as source of truth, with iOS local cache/outbox for offline continuity.
 - Permission strategy: Denial of any permission must not block the main search/details flow.
 
 ## 12. Risks and Mitigations
@@ -291,15 +292,15 @@ Acceptance Criteria:
   - Mitigation: Explicit low-confidence prompt + prominent latest update time.
 - Speech recognition errors in noisy environments.
   - Mitigation: Pre-submit confirmation and editable content.
-- Small local test data size may reduce summary representativeness.
-  - Mitigation: Mark "test data environment" in review/demo and reserve extension points for future real data source integration.
+- Early-stage low review coverage may reduce summary representativeness.
+  - Mitigation: low-confidence label, review-count display, and recency timestamp in all summaries.
 
 ## 13. Acceptance Criteria (Must Meet Before Release)
 - VoiceOver-only can complete: search place, listen to summary, submit feedback, view nearby.
 - Three local demo roles can switch, and permission isolation is enforced by role.
 - Full flow does not rely on QR codes.
 - Under permission denial, app does not crash and provides executable alternative paths.
-- Local data (recently viewed and saved feedback) is recoverable across restarts.
+- Cached data and queued feedback are recoverable across restarts.
 - Place summary fields are always complete, with fallback text when data is missing.
 
 ## 14. Milestones and Deliverables
@@ -307,9 +308,9 @@ Acceptance Criteria:
 - Week 2: End-to-end integration of search and summary.
 - Week 3: End-to-end integration of voice feedback submission and confirmation flow.
 - Week 4: Nearby places and recent reviews completed.
-- Week 5: Local score-calculation stability, accessibility testing, and TestFlight release preparation.
+- Week 5: Backend score-calculation stability, accessibility testing, and TestFlight release preparation.
 
 Deliverables:
 - Runnable iOS MVP package.
-- Local test dataset and local database initialization scripts.
+- Backend API contract, backend schema/migration scripts, and iOS cache/outbox schema scripts.
 - Requirements acceptance checklist and test report.

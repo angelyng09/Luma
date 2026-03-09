@@ -3,7 +3,7 @@
 ## 1. Document Information
 - Document Name: Luma Role Features and Flowcharts
 - Applicable Version: Luma iOS MVP (local demo identity mode)
-- Updated On: 2026-03-01
+- Updated On: 2026-03-09
 
 ## 2. Role Definitions
 - Visually Impaired/Low-Vision User Account: Core MVP user role, responsible for search, viewing, and feedback.
@@ -23,7 +23,7 @@
 | View Nearby Places | Supported | Supported | Supported |
 | Maintain Venue Status (facility availability, temporary issues) | Not Supported | Supported | Read-only |
 | Community Feedback Management (flag/hide/restore) | Not Supported | Read-only | Supported |
-| Local Data Management (restore test data/clear cache) | Read-only | Supported | Supported |
+| Local Data Management (refresh sync/clear cache/retry outbox) | Read-only | Supported | Supported |
 
 ## 4. Global Flowchart (Role Switching + Permission Routing)
 
@@ -44,10 +44,13 @@ flowchart TD
     M1 --> I[Run Venue Status Maintenance Flow]
     G1 --> J[Run Community Content Management Flow]
 
-    H --> K[Persist to Local Database]
+    H --> K[Submit or Sync via Backend API]
     I --> K
     J --> K
-    K --> L[Refresh Local Summaries and Lists]
+    K --> L{Network Available?}
+    L -- Yes --> M[Refresh Summaries and Lists from Backend Snapshot]
+    L -- No --> N[Queue Changes Locally and Retry in Background]
+    N --> M
 ```
 
 ## 5. Visually Impaired/Low-Vision User Flowchart
@@ -68,8 +71,11 @@ flowchart TD
     F --> J[Voice Transcription]
     J --> K[Rule Parsing: Signal Type/Suggested Score]
     K --> L[User Confirms or Edits]
-    L --> M[Save Feedback Locally]
-    M --> N[Refresh Place Summary Immediately]
+    L --> M[Submit Feedback API]
+    M --> N{Submit Success?}
+    N -- Yes --> O[Refresh Place Summary Snapshot]
+    N -- No --> P[Queue in Local Outbox]
+    P --> O
 ```
 
 ## 6. Venue Maintenance Account Flowchart
@@ -81,9 +87,9 @@ flowchart TD
     C --> D[Edit Status Fields]
     D --> E[Update Facility Availability]
     D --> F[Update Temporary Issue Flags]
-    E --> G[Save to Local Database]
+    E --> G[Submit Venue Status Update API]
     F --> G
-    G --> H[Trigger Local Summary Recalculation]
+    G --> H[Backend Recomputes Summary Snapshot]
     H --> I[Frontend Detail Page Shows Latest Status]
 ```
 
@@ -97,7 +103,7 @@ flowchart TD
     D -- Flag --> E[Set flagged]
     D -- Hide --> F[Set hidden]
     D -- Restore --> G[Restore active]
-    E --> H[Write Local Management Record]
+    E --> H[Submit Moderation API]
     F --> H
     G --> H
     H --> I[Refresh Community List and Place Summary]
@@ -107,10 +113,10 @@ flowchart TD
 - Permissions take effect immediately after role switching, and do not trigger real login/authentication.
 - Visible page does not mean executable actions: roles without permission are read-only and cannot submit changes.
 - All key state transitions (save success, insufficient permissions, operation failure) require voice announcements.
-- All role flows are based on local test data and local database only, with no backend dependency.
+- All role flows use backend APIs as source of truth, with local cache/outbox fallback when offline.
 
 ## 9. Review and Acceptance Recommendations
 - Verify whether three-role switching takes effect immediately (page entries, button executability changes).
 - Verify that "read-only roles" cannot perform restricted actions.
-- Verify that local data and UI state remain consistent after actions by all three roles.
+- Verify that backend state, cached state, and UI state remain consistent after actions by all three roles.
 - Verify under VoiceOver that the role-switch entry and key buttons are fully operable.

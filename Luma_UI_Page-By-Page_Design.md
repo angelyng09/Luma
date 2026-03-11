@@ -3,7 +3,7 @@
 ## 1. Document Information
 - Document Name: Luma UI Detailed Pagination Design (Text Version)
 - Applicable Version: Luma iOS MVP (local demo identities)
-- Updated On: 2026-03-09
+- Updated On: 2026-03-11
 - Design Principles: VoiceOver-first, low interaction cost, shared data + offline fallback loop
 
 ## 2. Global Design Guidelines
@@ -31,23 +31,50 @@ Each page follows the same structure:
 - Title/body contrast must meet WCAG AA.
 - Support Dynamic Type up to Accessibility Large.
 
-### 2.5 Global Scoring Rule Binding (MVP)
-- Each place has a backend summary with:
+### 2.5 Accessibility Scoring Rules (MVP)
+- Each place has an on-device score snapshot with:
   - `accessibility_score`
   - `review_count_30d`
+  - `review_count_90d`
+  - `review_count_total`
+  - `dimension_uncertain_flags`
   - top positive points and top issues
   - update timestamps
 - The app always shows score as a whole number from `0` to `100`.
-- Scoring behavior:
-  - Newer reviews count more than older reviews.
-  - Review ratings are combined into one average, then converted to `0-100`.
-  - If active reviews in the last 30 days are fewer than `3`, cap score at `65` and show `Low confidence`.
+- Scoring dimensions and suggested weights:
+  - Entrance accessibility `15%`
+  - Route clarity `15%`
+  - Vertical mobility availability `12%`
+  - Restroom accessibility `10%`
+  - Obstacles and hazards `12%`
+  - Staff assistance availability `10%`
+  - Crowd and queue manageability `10%`
+  - Environmental perceivability `8%`
+  - Temporary disruption impact `8%`
+- Scoring formula:
+  - Each dimension is rated on `1-5`.
+  - Since weights already sum to `100`, implementation can use either equivalent form:
+  - `final_score = sum(dimension_rating_1_to_5 * weight_percent) / 5`
+  - `final_score = weighted_average_rating * 20`
+  - Scores are rounded to the nearest integer.
+- Evidence behavior:
+  - Newer evidence counts more than older evidence (time decay).
+  - Use review signals and venue-status signals mapped to the nine dimensions.
+  - If a dimension has no recent evidence, set that dimension rating to neutral `3` and mark it as `uncertain`.
+  - Temporary disruption signals decay faster than permanent accessibility signals.
+  - Suggested decay windows: permanent features `90` days, temporary disruptions `7-14` days.
+- Safety cap rule:
+  - Staff assistance cannot fully compensate for major structural barriers.
+  - If Entrance accessibility rating is `<= 2`, cap overall score at `60`.
 - Review eligibility:
-  - Include only `active` reviews.
-  - Exclude `flagged` and `removed` reviews.
+  - Include only `active` and `confirmed` reviews.
+  - Exclude `flagged`, `hidden`, and `removed` reviews.
 - Refresh timing:
   - Recompute after a user confirms a review.
-  - Also recompute every 15 minutes as fallback.
+  - Recompute after venue status updates.
+  - Run a lightweight consistency recompute when app returns to foreground.
+- Low confidence rule:
+  - Show `Low confidence` if `confirmed_reviews_last_90d < 3` OR `confirmed_reviews_total < 5`.
 - If valid data is missing or very limited, show a neutral score with caution messaging.
 
 ## 3. Page List (by Priority)
@@ -266,7 +293,7 @@ Each page follows the same structure:
 3. Two-column highlights area:
    - Doing Well (Top 2)
    - Common Issues (Top 2)
-4. Info area: `Latest update time`, `Review count in last 30 days`
+4. Info area: `Latest update time`, `Review count in last 30 days`, `Confirmed reviews in last 90 days`, `Confirmed reviews total`
 5. Action area:
    - Review Current Place
    - View Recent Reviews
@@ -279,23 +306,30 @@ Each page follows the same structure:
 - Read summary from snapshot fields:
   - `accessibility_score` (0-100)
   - `review_count_30d`
+  - `review_count_90d`
+  - `review_count_total`
   - `top_positive_json` (Top 2)
   - `top_negative_json` (Top 2)
   - `last_review_at`
+- Internal rule reference (not required to expose in UI):
+  - Score is derived from nine weighted dimensions, each rated `1-5`.
+  - Use `sum(dimension_rating_1_to_5 * weight_percent) / 5` (equivalent to `weighted_average_rating * 20`).
+  - If any dimension has no recent evidence, that dimension defaults to neutral `3` and is marked `uncertain`.
+  - If Entrance accessibility rating is `<= 2`, cap overall score at `60`.
 - Confidence display rule:
-  - If `review_count_30d < 3`, append `Low confidence` and keep caution copy visible.
+  - If `confirmed_reviews_last_90d < 3` OR `confirmed_reviews_total < 5`, append `Low confidence` and keep caution copy visible.
 - Do not show separate scores by role; all roles read the same place-level score output.
 
 **State Design**
 - Loading: `Loading place summary`.
 - Missing data: Show fallback text `Current data is limited. Please reference with caution`.
-- Low confidence: Show score with inline note `Low confidence: based on limited recent reviews`.
+- Low confidence: Show score with inline note `Low confidence: based on limited confirmed evidence`.
 - Score refresh pending (after submit): keep last snapshot visible and show `Updating latest community signal`.
 
 **VoiceOver Design**
 - First focus: Place title.
 - Entry announcement: `Accessibility score X out of 100. Swipe right for details.`
-- If low confidence: append `Low confidence due to limited recent reviews.`
+- If low confidence: append `Low confidence due to limited confirmed evidence.`
 
 ---
 
@@ -337,9 +371,9 @@ Each page follows the same structure:
 4. Button group: `Confirm Save`, `Back to Edit`, `Cancel`
 
 **Key Interactions**
-- Tap "Confirm Save" to submit review to backend and return to Place Detail.
-- If offline or request fails, queue review locally and retry in background.
-- On successful submit, trigger score/summary recompute for that place.
+- Tap "Confirm Save" to persist review to local store and return to Place Detail.
+- If local write fails, preserve draft and allow immediate retry.
+- On successful save, trigger local score/summary recompute for that place.
 
 **State Design**
 - Save success: Toast + voice announcement.
@@ -348,7 +382,7 @@ Each page follows the same structure:
 
 **VoiceOver Design**
 - Success announcement: `Review submitted`.
-- Offline queued announcement: `Review queued. It will send when connection is available.`
+- Save-failed announcement: `Review save failed. Draft kept locally. Please try again.`
 
 ---
 

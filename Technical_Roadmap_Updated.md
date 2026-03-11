@@ -12,6 +12,7 @@ Non-Goals (MVP)
 - No custom mapping stack.
 - No AI-heavy moderation or generative pipeline in v1.
 - No venue enterprise dashboard in v1.
+- No backend service development or cloud sync in MVP.
 
 2. Product Constraints to Enforce
 
@@ -20,7 +21,7 @@ Non-Goals (MVP)
 - Usable without looking: each key screen must support full interaction via spoken prompts, haptics, and predictable focus order.
 - No QR dependence: place entry via search, nearby detection, recent list, or voice command.
 - Rule-based first: deterministic parsing/scoring/categorization; AI optional in later phase.
-- Realistic shipping: use Apple-native frameworks and simple backend patterns.
+- Realistic shipping: use Apple-native frameworks with on-device data and no backend development in MVP.
 
 3. MVP Feature Set (Ship This First)
 
@@ -34,7 +35,7 @@ Non-Goals (MVP)
 - Nearby/On-site status via GPS proximity (no geofencing daemon required for v1).
 - Submit Feedback via speech-to-text + rule-based auto-tagging + confirmation step.
 - Recent reviews list prioritized by recency and credibility.
-- Offline read cache for last viewed places + pending review queue.
+- On-device persistence for place summaries, reviews, and draft recovery.
 
 4. System Architecture (Concrete)
 
@@ -50,20 +51,18 @@ Non-Goals (MVP)
 - Location:
   - CoreLocation standard updates (foreground) for nearby place suggestions
 - Data:
-  - URLSession + async/await
   - Local persistence: SQLite via GRDB or Core Data (choose one; GRDB is simpler for explicit schema control)
-  - Background sync for queued feedback via BGTaskScheduler (best-effort)
+  - No remote API calls in MVP; all reads/writes happen on-device
+  - Background maintenance tasks (best-effort) for local cleanup/recompute
 
-4.2 Backend (Simple, Maintainable)
-- API: REST (FastAPI/Node/Go; pick team’s strongest stack)
-- DB: PostgreSQL
-- Jobs/cron:
-  - Recompute place confidence snapshots every 15 minutes
-  - Recompute summary bullets every 15 minutes
-- Auth: anonymous device token for MVP + optional signed-in account later
-- Observability: request logs, error logging, basic metric counters
+4.2 On-Device Data Layer (MVP Decision)
+- No backend service development for MVP.
+- Source of truth: local SQLite database stored on the phone.
+- All scoring, summary generation, moderation actions, and venue-status updates run in-app.
+- Account-and-password authentication is handled in-app, and role-based permissions are enforced locally.
+- Data export/sync is out of MVP scope.
 
-5. Data Model (MVP Tables)
+5. Data Model (MVP Local Tables)
 
 5.1 `places` (masterlist)
 - `id` (uuid, pk)
@@ -77,7 +76,7 @@ Non-Goals (MVP)
 5.2 `reviews`
 - `id` (uuid, pk)
 - `place_id` (uuid, fk -> places)
-- `user_id` (uuid/hashed device id)
+- `user_id` (local account id)
 - `raw_text` (text)
 - `signal_type` (enum): entrance_access, pathway_clarity, stairs_condition, elevator_status, escalator_status, restroom_access, seating_availability, staff_helpfulness, security_helpfulness, queue_manageability, crowding_level, noise_level, lighting_glare, obstacle_hazards, temporary_disruptions, other
 - `rating` (int 1-5) // single rating: 1 very poor, 5 very good
@@ -143,53 +142,72 @@ Non-Goals (MVP)
     - positive (“helpful”, “available”, “easy”) -> rating 4
     - very positive (“excellent”, “always available”, “very helpful”) -> rating 5
 
-6.2 General Scoring Rules (Detailed, MVP Baseline)
+6.2 Dimension-Weighted Scoring Rules (Directional MVP Guideline)
 - Objective:
-  - Produce one deterministic `accessibility_score` (0-100) per place that reflects recent accessibility conditions more than old reports.
+  - Produce one deterministic `accessibility_score` (0-100) per place using a weighted multi-dimension model.
+  - Keep this as a practical guideline for MVP tuning, not a fixed academic model.
 - Scope of data included:
   - Include only reviews with `status=active` and `confirmed=true`.
+  - Include latest active venue status updates.
   - Use `event_time` as the time reference for freshness (not `created_at`).
   - Ignore `flagged`, `hidden`, and `removed` reviews from scoring and summary generation.
 
-- Step A: Per-review weight calculation
-  - For each eligible review `r`:
-    - `hours_since_review = max(0, hours_between(now_utc, r.event_time))`
-    - `recency_weight = exp(-hours_since_review / 168)`  // 168h = 7 days decay constant
-    - `credibility_weight = 1.0` for MVP (dynamic reputation weighting intentionally disabled)
-    - `review_weight = recency_weight * credibility_weight`
-  - Interpretation:
-    - A very recent review has weight close to 1.0.
-    - Older reviews are still considered but decay smoothly toward 0.
+- Scoring dimensions and suggested weights:
+  - Entrance accessibility: `15%`
+  - Route clarity: `15%`
+  - Vertical mobility availability (elevator/escalator/alternatives): `12%`
+  - Restroom accessibility: `10%`
+  - Obstacles and hazards: `12%`
+  - Staff assistance availability: `10%`
+  - Crowd and queue manageability: `10%`
+  - Environmental perceivability (noise/broadcast/glare): `8%`
+  - Temporary disruption impact (service stop/closure/breakdown): `8%`
 
-- Step B: Weighted average on rating scale (1-5)
-  - `weighted_sum = sum(r.rating * review_weight)`
-  - `weight_total = sum(review_weight)`
-  - If `weight_total > 0`:
-    - `weighted_rating_1_to_5 = weighted_sum / weight_total`
-  - If `weight_total == 0` (no eligible reviews):
-    - Set `weighted_rating_1_to_5 = 3.0` (neutral fallback for stable UI output).
+- Step A: Build each dimension rating (`1-5`)
+  - For each dimension `d`, gather relevant evidence within its active lookback window.
+  - Evidence source:
+    - review signals mapped to this dimension
+    - venue status updates mapped to this dimension
+  - For each evidence item `e`:
+    - `hours_since_event = max(0, hours_between(now_utc, e.event_time))`
+    - For permanent accessibility dimensions, use slower decay:
+      - `recency_weight = exp(-hours_since_event / 2160)`  // 90-day decay constant
+    - For temporary disruption impact, use faster decay:
+      - `recency_weight = exp(-hours_since_event / 240)`  // 10-day decay constant (within 7-14 day target)
+    - `evidence_weight = recency_weight`
+  - Compute:
+    - `dimension_rating_d = weighted_avg(e.rating_1_to_5, evidence_weight)`
+  - Fallback:
+    - if dimension has no recent evidence in its lookback window, set `dimension_rating_d = 3.0` and mark dimension as `uncertain`.
 
-- Step C: Normalize to 0-100 score
-  - `raw_score = ((weighted_rating_1_to_5 - 1.0) / 4.0) * 100.0`
-  - `normalized_score = clamp(round(raw_score), 0, 100)`
+- Step B: Compute final score (`0-100`)
+  - Since weights sum to `100`, use either equivalent form:
+    - `raw_score = sum(dimension_rating_d * weight_percent_d) / 5`
+    - `raw_score = weighted_average_rating_1_to_5 * 20`
+  - Critical-structure safety cap:
+    - if `entrance_accessibility_rating <= 2`, then `raw_score = min(raw_score, 60)`.
+  - `accessibility_score = clamp(round(raw_score), 0, 100)`  // rounded to nearest integer
 
-- Step D: Low-evidence penalty (general trust rule)
-  - `review_count_30d = count(active and confirmed reviews where event_time >= now_utc - 30 days)`
-  - If `review_count_30d < 3`:
-    - `accessibility_score = min(normalized_score, 65)`
-    - Mark place as `low_confidence` for UI messaging.
+- Step C: Low confidence rule
+  - `review_count_90d = count(active and confirmed reviews where event_time >= now_utc - 90 days)`
+  - `review_count_total = count(all active and confirmed reviews)`
+  - If `review_count_90d < 3` OR `review_count_total < 5`:
+    - mark place as `low_confidence = true`.
   - Else:
-    - `accessibility_score = normalized_score`
+    - set `low_confidence = false`.
 
-- Step E: Summary extraction from the same weighted set
-  - Build “works well” from highest weighted items where `rating in [4,5]`.
-  - Build “common issues” from highest weighted items where `rating in [1,2]`.
+- Step D: Summary extraction from the same evidence set
+  - Build “works well” from high-rated evidence (`rating in [4,5]`) with strongest weights.
+  - Build “common issues” from low-rated evidence (`rating in [1,2]`) with strongest weights.
   - Keep top 2 items per side for concise VoiceOver output.
 
-- Step F: Snapshot persistence and freshness
+- Step E: Snapshot persistence and freshness
   - Persist to `place_scores_snapshot`:
     - `accessibility_score`
     - `review_count_30d`
+    - `review_count_90d`
+    - `review_count_total`
+    - `dimension_uncertain_json`
     - `low_confidence`
     - `top_positive_json`
     - `top_negative_json`
@@ -197,8 +215,8 @@ Non-Goals (MVP)
     - `last_venue_update_at`
     - `computed_at`
   - Recompute trigger policy:
-    - Event-driven recompute after review confirm/save.
-    - Scheduled recompute every 15 minutes as consistency backstop.
+    - Event-driven recompute after review confirm/save and venue-status updates.
+    - Lightweight consistency pass on app launch and when returning to foreground.
 
 - Determinism requirements:
   - Same input dataset and same `now_utc` reference must always produce the same output.
@@ -206,185 +224,119 @@ Non-Goals (MVP)
 
 6.3 Summary Generation (Template-Based)
 - No generative AI.
-- Build top bullets from highest weighted active signals:
+- Build top bullets from highest weighted active evidence aligned to scoring dimensions:
   - “works well” from highest weighted ratings (4-5)
   - “common issues” from lowest weighted ratings (1-2)
 - Spoken summary format:
   - “Accessibility confidence 72 out of 100. Working well: elevator availability, helpful staff. Common issues: restroom wayfinding, crowding.”
 
-7. API Contract (MVP Endpoints) (backend-to-app agreement for MVP)
+7. Local Data Service Contract (In-App, No Backend)
 
 7.0 Shared Contract Rules
-- Base path: `/v1`
-- Content type: `application/json; charset=utf-8`
-- Timestamp format: RFC3339 UTC (example: `2026-03-09T18:30:00Z`)
-- Authentication headers:
-  - `Authorization: Bearer <anonymous_device_token>`
-  - `X-Role: user | venue_maintenance | community_management | admin`
-- Idempotency for write operations:
-  - Header: `Idempotency-Key: <device_id+place_id+event_time+raw_text_hash>`
-  - Required on `POST/PATCH` endpoints that mutate data.
+- Execution boundary:
+  - All operations are in-process Swift services (`LocalRepository`, `RuleEngine`, `PermissionGuard`).
+  - No HTTP endpoints, no server deployment, no remote request/response cycle.
+- Timestamp format: RFC3339 UTC (example: `2026-03-11T18:30:00Z`).
+- Authentication and authorization:
+  - User signs in with account + password in-app.
+  - Current role is read from local account profile: `user | venue_maintenance | community_management | admin`.
+- Write consistency:
+  - Every mutation runs in a single SQLite transaction.
+  - On transaction failure, operation is rolled back and no partial state is committed.
 - Pagination:
-  - Cursor-based for list endpoints.
-  - Query params: `limit` (default 20, max 100), `cursor` (opaque token).
-  - Response `meta`: `{ "next_cursor": "..." | null }`
-- Standard error envelope:
+  - Offset-based for local lists.
+  - Params: `limit` (default 20, max 100), `offset` (default 0).
+- Standard local error envelope:
   - `{ "error": { "code": "<STRING_CODE>", "message": "<human readable>", "details": { ... } } }`
-- Standard HTTP status usage:
-  - `200` success read/update, `201` created, `400` validation error, `401` unauthorized, `403` forbidden, `404` not found, `409` conflict, `422` semantic validation, `429` rate limited, `500` server error.
 
-7.1 `GET /v1/places/search`
-- Query params:
-  - `q` (string, required, 2-80 chars)
+7.1 `searchPlaces(query, lat, lng, radiusM, sort, limit, offset)`
+- Inputs:
+  - `query` (string, required, 2-80 chars)
   - `lat` (float, optional)
   - `lng` (float, optional)
-  - `radius_m` (int, optional, default 2000, min 100, max 5000)
+  - `radiusM` (int, optional, default 2000, min 100, max 5000)
   - `sort` (enum, optional): relevance, distance, score (default relevance)
-  - `limit` (int, optional), `cursor` (string, optional)
-- Response `200`:
-  - `data.items[]`:
-    - `place_id` (uuid)
-    - `name` (string)
-    - `distance_m` (int, nullable when lat/lng absent)
-    - `accessibility_score` (int 0-100)
-    - `low_confidence` (bool)
-    - `review_count_30d` (int)
-    - `last_review_at` (timestamp, nullable)
-  - `meta.next_cursor` (string|null)
+  - `limit`, `offset` (optional)
+- Output:
+  - `items[]` with `place_id`, `name`, `distance_m`, `accessibility_score`, `low_confidence`, `review_count_30d`, `last_review_at`
 - Errors:
-  - `400 INVALID_QUERY`, `401 UNAUTHORIZED`, `429 RATE_LIMITED`, `500 INTERNAL_ERROR`
+  - `INVALID_QUERY`, `DB_READ_FAILED`
 
-7.2 `GET /v1/places/{place_id}/summary`
-- Path params:
-  - `place_id` (uuid, required)
-- Response `200`:
-  - `data`:
-    - `place_id` (uuid)
-    - `name` (string)
-    - `accessibility_score` (int 0-100)
-    - `low_confidence` (bool)
-    - `review_count_30d` (int)
-    - `top_positive` (array<string>, max 2)
-    - `top_negative` (array<string>, max 2)
-    - `last_review_at` (timestamp, nullable)
-    - `last_venue_update_at` (timestamp, nullable)
-    - `computed_at` (timestamp)
+7.2 `getPlaceSummary(placeId)`
+- Inputs:
+  - `placeId` (uuid, required)
+- Output:
+  - `place_id`, `name`, `accessibility_score`, `low_confidence`, `review_count_30d`, `top_positive[]`, `top_negative[]`, `last_review_at`, `last_venue_update_at`, `computed_at`
 - Errors:
-  - `400 INVALID_PLACE_ID`, `401 UNAUTHORIZED`, `404 PLACE_NOT_FOUND`, `500 INTERNAL_ERROR`
+  - `INVALID_PLACE_ID`, `PLACE_NOT_FOUND`, `DB_READ_FAILED`
 
-7.3 `GET /v1/places/nearby`
-- Query params:
+7.3 `getNearbyPlaces(lat, lng, radiusM, limit, offset)`
+- Inputs:
   - `lat` (float, required)
   - `lng` (float, required)
-  - `radius_m` (int, optional, default 500, min 100, max 2000)
-  - `limit` (int, optional), `cursor` (string, optional)
-- Response `200`:
-  - `data.items[]`: same shape as search result item
-  - `meta.next_cursor` (string|null)
+  - `radiusM` (int, optional, default 500, min 100, max 2000)
+  - `limit`, `offset` (optional)
+- Output:
+  - `items[]` same shape as `searchPlaces`
 - Errors:
-  - `400 INVALID_COORDINATES`, `401 UNAUTHORIZED`, `429 RATE_LIMITED`, `500 INTERNAL_ERROR`
+  - `INVALID_COORDINATES`, `DB_READ_FAILED`
 
-7.4 `GET /v1/places/{place_id}/reviews`
-- Query params:
-  - `limit` (int, optional, default 20, max 100)
-  - `cursor` (string, optional)
+7.4 `listReviews(placeId, status, signalType, from, to, limit, offset)`
+- Inputs:
+  - `placeId` (uuid, required)
   - `status` (enum, optional): active, flagged, hidden, removed, all (default active)
-  - `signal_type` (enum, optional)
-  - `from` (timestamp, optional)
-  - `to` (timestamp, optional)
+  - `signalType` (enum, optional)
+  - `from`, `to` (timestamp, optional)
+  - `limit`, `offset` (optional)
 - Permission rule:
   - `user` role can request only `status=active`.
-  - moderation roles can request all statuses.
-- Response `200`:
-  - `data.items[]`:
-    - `review_id` (uuid)
-    - `place_id` (uuid)
-    - `raw_text` (string)
-    - `signal_type` (enum)
-    - `rating` (int 1-5)
-    - `source` (enum: voice|text)
-    - `event_time` (timestamp)
-    - `status` (enum)
-    - `confirmed` (bool)
-    - `created_at` (timestamp)
-  - `meta.next_cursor` (string|null)
+  - Moderation roles can request all statuses.
+- Output:
+  - `items[]` with `review_id`, `place_id`, `raw_text`, `signal_type`, `rating`, `source`, `event_time`, `status`, `confirmed`, `created_at`
 - Errors:
-  - `400 INVALID_FILTER`, `401 UNAUTHORIZED`, `403 FORBIDDEN_STATUS_SCOPE`, `404 PLACE_NOT_FOUND`, `500 INTERNAL_ERROR`
+  - `INVALID_FILTER`, `FORBIDDEN_STATUS_SCOPE`, `PLACE_NOT_FOUND`, `DB_READ_FAILED`
 
-7.5 `POST /v1/reviews`
-- Headers:
-  - `Authorization`, `X-Role`, `Idempotency-Key` (required)
-- Body:
-  - `place_id` (uuid, required)
-  - `raw_text` (string, required, 1-2000 chars)
-  - `event_time` (timestamp, required)
+7.5 `createReview(placeId, rawText, eventTime, source)`
+- Inputs:
+  - `placeId` (uuid, required)
+  - `rawText` (string, required, 1-2000 chars)
+  - `eventTime` (timestamp, required)
   - `source` (enum, required): voice, text
 - Behavior:
-  - Server parses signal type + suggested score.
-  - Persists review with `confirmed=false` and `status=active`.
-- Response `201`:
-  - `data`:
-    - `review_id` (uuid)
-    - `place_id` (uuid)
-    - `signal_type` (enum)
-    - `suggested_rating` (int 1-5)
-    - `confirmed` (bool=false)
-    - `status` (enum=active)
-    - `created_at` (timestamp)
+  - In-app rule engine parses signal type + suggested rating.
+  - Persist review with `confirmed=false` and `status=active`.
+- Output:
+  - `review_id`, `place_id`, `signal_type`, `suggested_rating`, `confirmed`, `status`, `created_at`
 - Errors:
-  - `400 INVALID_BODY`, `401 UNAUTHORIZED`, `404 PLACE_NOT_FOUND`, `409 DUPLICATE_IDEMPOTENCY_KEY`, `422 REVIEW_TOO_LONG_OR_INVALID_TIME`, `500 INTERNAL_ERROR`
+  - `INVALID_BODY`, `PLACE_NOT_FOUND`, `REVIEW_TOO_LONG_OR_INVALID_TIME`, `DB_WRITE_FAILED`
 
-7.6 `POST /v1/reviews/{id}/confirm`
-- Headers:
-  - `Authorization`, `X-Role`, `Idempotency-Key` (required)
-- Body:
+7.6 `confirmReview(reviewId, confirmed, rawText?, signalType?, rating?)`
+- Inputs:
+  - `reviewId` (uuid, required)
   - `confirmed` (bool, required)
-  - `raw_text` (string, optional correction if user edited)
-  - `signal_type` (enum, optional correction)
-  - `rating` (int 1-5, optional correction)
+  - Optional corrections: `rawText`, `signalType`, `rating`
 - Behavior:
-  - If `confirmed=true`, set `confirmed=true`, set `confirmed_at`, and trigger recompute job for place snapshot.
-  - If `confirmed=false`, keep review unconfirmed (or delete by policy) and allow client resubmission path.
-- Response `200`:
-  - `data`:
-    - `review_id` (uuid)
-    - `confirmed` (bool)
-    - `status` (enum)
-    - `recompute_enqueued` (bool)
+  - If `confirmed=true`, set `confirmed=true`, set `confirmed_at`, then recompute place snapshot immediately in-app.
+  - If `confirmed=false`, keep unconfirmed (or delete by policy) and allow user resubmission.
+- Output:
+  - `review_id`, `confirmed`, `status`, `recompute_completed`
 - Errors:
-  - `400 INVALID_CONFIRM_PAYLOAD`, `401 UNAUTHORIZED`, `403 FORBIDDEN`, `404 REVIEW_NOT_FOUND`, `409 REVIEW_ALREADY_CONFIRMED`, `500 INTERNAL_ERROR`
+  - `INVALID_CONFIRM_PAYLOAD`, `FORBIDDEN`, `REVIEW_NOT_FOUND`, `REVIEW_ALREADY_CONFIRMED`, `DB_WRITE_FAILED`
 
-7.7 `PATCH /v1/places/{place_id}/venue-status` (FR-10 support)
+7.7 `updateVenueStatus(placeId, elevatorStatus, restroomAccess, temporaryIssueFlag, temporaryIssueNote, eventTime)` (FR-10 support)
 - Permission:
   - Allowed roles: `venue_maintenance`, `admin`
-- Headers:
-  - `Authorization`, `X-Role`, `Idempotency-Key` (required)
-- Body:
-  - `elevator_status` (enum): available, unavailable, unknown
-  - `restroom_access` (enum): normal, limited, unavailable, unknown
-  - `temporary_issue_flag` (bool)
-  - `temporary_issue_note` (string, optional, max 500)
-  - `event_time` (timestamp, required)
 - Behavior:
   - Persist to `venue_status_updates`.
-  - Trigger summary recompute.
-- Response `200`:
-  - `data`:
-    - `update_id` (uuid)
-    - `place_id` (uuid)
-    - `last_venue_update_at` (timestamp)
-    - `recompute_enqueued` (bool)
+  - Trigger in-app summary recompute.
+- Output:
+  - `update_id`, `place_id`, `last_venue_update_at`, `recompute_completed`
 - Errors:
-  - `400 INVALID_VENUE_STATUS`, `401 UNAUTHORIZED`, `403 FORBIDDEN_ROLE`, `404 PLACE_NOT_FOUND`, `500 INTERNAL_ERROR`
+  - `INVALID_VENUE_STATUS`, `FORBIDDEN_ROLE`, `PLACE_NOT_FOUND`, `DB_WRITE_FAILED`
 
-7.8 `POST /v1/reviews/{id}/moderation` (FR-11 support)
+7.8 `moderateReview(reviewId, action, reason?)` (FR-11 support)
 - Permission:
   - Allowed roles: `community_management`, `admin`
-- Headers:
-  - `Authorization`, `X-Role`, `Idempotency-Key` (required)
-- Body:
-  - `action` (enum, required): flag, hide, restore, remove
-  - `reason` (string, optional, max 500)
 - Behavior:
   - Write action record to `review_moderation_actions`.
   - Apply review status mapping:
@@ -392,15 +344,11 @@ Non-Goals (MVP)
     - `hide` -> `hidden`
     - `restore` -> `active`
     - `remove` -> `removed`
-  - Trigger summary recompute when final status affects scoring visibility.
-- Response `200`:
-  - `data`:
-    - `review_id` (uuid)
-    - `new_status` (enum)
-    - `action_id` (uuid)
-    - `recompute_enqueued` (bool)
+  - Trigger in-app summary recompute when status affects scoring visibility.
+- Output:
+  - `review_id`, `new_status`, `action_id`, `recompute_completed`
 - Errors:
-  - `400 INVALID_MODERATION_ACTION`, `401 UNAUTHORIZED`, `403 FORBIDDEN_ROLE`, `404 REVIEW_NOT_FOUND`, `409 INVALID_STATUS_TRANSITION`, `500 INTERNAL_ERROR`
+  - `INVALID_MODERATION_ACTION`, `FORBIDDEN_ROLE`, `REVIEW_NOT_FOUND`, `INVALID_STATUS_TRANSITION`, `DB_WRITE_FAILED`
 
 8. iOS App Structure (Engineer-Ready)
 
@@ -411,7 +359,7 @@ Non-Goals (MVP)
 - `Features/PlaceDetail`
 - `Features/Nearby`
 - `Features/SubmitReview`
-- `Data/RemoteAPI`
+- `Data/LocalRepository`
 - `Data/LocalStore`
 - `Domain/RulePresentation` (format spoken summaries, recency phrasing)
 
@@ -485,13 +433,13 @@ Non-Goals (MVP)
 - Review Capture:
   - Loading: announce recording/transcribing state changes.
   - Success: submit review and announce “Review submitted”.
-  - Failure: queue offline and announce “Review queued”.
+  - Failure: save draft locally and announce “Review saved locally. Please try again.”
 - Nearby:
   - Loading: announce “Finding nearby places”.
   - Success: list sorted by distance with full VoiceOver labels.
   - Failure: if location denied, show shortcut to manual search.
 
-9. iOS Local DB Schema (Cache + Outbox)
+9. iOS Local DB Schema (Primary Store, On-Device)
 
 9.0 `app_settings`
 - `key` (text, pk)
@@ -500,34 +448,68 @@ Non-Goals (MVP)
   - `tutorial_completed` = `true|false`
   - `tutorial_last_played_at` = ISO8601 timestamp
 
-9.1 `cached_place_summaries`
+9.1 `accounts`
+- `account_id` (text, pk)
+- `username` (text, unique)
+- `password_hash` (text)
+- `role` (text): user, venue_maintenance, community_management, admin
+- `created_at` (text/ISO8601)
+- `last_login_at` (text/ISO8601, nullable)
+
+9.2 `places`
 - `place_id` (text, pk)
-- `place_name` (text)
+- `place_name` (text, indexed)
+- `lat` (real)
+- `lng` (real)
+- `category` (text)
+- `city` (text)
+- `updated_at` (text/ISO8601)
+
+9.3 `place_scores_snapshot`
+- `place_id` (text, pk)
 - `accessibility_score` (int)
 - `top_positive_json` (text)
 - `top_negative_json` (text)
 - `last_review_at` (text/ISO8601)
 - `review_count_30d` (int)
-- `cached_at` (text/ISO8601)
+- `last_venue_update_at` (text/ISO8601, nullable)
+- `computed_at` (text/ISO8601)
 
-9.2 `cached_place_reviews`
+9.4 `reviews`
 - `id` (text, pk)
 - `place_id` (text, indexed)
 - `rating` (int 1-5)
 - `raw_text` (text)
+- `signal_type` (text)
+- `source` (text): voice, text
+- `confirmed` (bool)
+- `status` (text): active, flagged, hidden, removed
 - `event_time` (text/ISO8601)
-- `cached_at` (text/ISO8601)
-
-9.3 `review_outbox`
-- `local_id` (text, pk)
-- `place_id` (text, indexed)
-- `raw_text` (text)
-- `rating` (int 1-5, nullable if server derives it)
-- `event_time` (text/ISO8601)
-- `attempt_count` (int default 0)
-- `next_retry_at` (text/ISO8601)
 - `created_at` (text/ISO8601)
-- `status` (text): pending, sending, failed
+- `updated_at` (text/ISO8601)
+
+9.5 `venue_status_updates`
+- `id` (text, pk)
+- `place_id` (text, indexed)
+- `actor_account_id` (text)
+- `actor_role` (text)
+- `elevator_status` (text)
+- `restroom_access` (text)
+- `temporary_issue_flag` (bool)
+- `temporary_issue_note` (text, nullable)
+- `event_time` (text/ISO8601)
+- `created_at` (text/ISO8601)
+- `status` (text): active, superseded
+
+9.6 `review_moderation_actions`
+- `id` (text, pk)
+- `review_id` (text, indexed)
+- `place_id` (text, indexed)
+- `actor_account_id` (text)
+- `actor_role` (text)
+- `action` (text): flag, hide, restore, remove
+- `reason` (text, nullable)
+- `created_at` (text/ISO8601)
 
 10. iOS Permissions Flow (Microphone, Speech, Location)
 - Microphone denied:
@@ -544,53 +526,48 @@ Non-Goals (MVP)
 
 11. Error and Retry Rules
 
-- Cache:
-  - Last 20 place summaries
-  - Last 50 recent reviews viewed
-- Outbox:
-  - Unsent review queue with retry backoff (30s, 2m, 10m, 30m, 2h)
-- If offline:
-  - User can still read cached summary
-  - User can submit review locally; app announces “Review queued, will send when online”
-- Timeout rules:
-  - Search/summary/reviews reads timeout at 10 seconds.
-  - Review submit timeout at 15 seconds, then move item to outbox.
+- Read behavior:
+  - All lists and summaries read from local SQLite; no network dependency.
+- Write behavior:
+  - On write failure, preserve user input as local draft and show “Retry now”.
+- DB lock handling:
+  - Retry write transaction with backoff (100ms, 300ms, 800ms, 2s), then fail gracefully.
 - Duplicate handling:
-  - Client sends idempotency key: `device_id + place_id + event_time + raw_text_hash`.
-  - Server returns existing review when same key was already processed.
-- Retry stop condition:
-  - After 10 failed attempts, mark outbox item `failed` and show “Retry now” action.
+  - Use unique constraint on `(place_id, event_time, raw_text_hash)` for review inserts.
+- Recovery:
+  - On app relaunch, restore unfinished draft review and pending local edits.
 
 12. Security and Privacy (MVP-Level)
 
 - No precise movement history stored beyond current request.
-- Hash device identifier before storage.
-- Encrypt transport with HTTPS only.
+- Hash device identifier before storage when device-level identity is required.
+- Store credential secrets in Keychain; store only password hashes in SQLite.
+- Enable iOS Data Protection for local database files.
 - Basic abuse protection:
-  - rate limit review submissions per user/hour
+  - local submission throttling per account/session
   - profanity/spam keyword filter
 
 13. Build Plan (5 Weeks, Realistic)
 
 Week 1 (Feb 29-Mar 6): Foundations
 - Feb 29: Kickoff, repo/module setup, define branch and ticket ownership.
-- Mar 1: Implement API client skeleton, local DB bootstrap, base navigation shell.
+- Mar 1: Implement local repository skeleton, local DB bootstrap, base navigation shell.
 - Mar 3: Add shared accessibility helpers + spoken announcement utility.
 - Mar 5: Integration check across Home flow with VoiceOver focus order pass.
 - Mar 6: Week 1 sign-off.
 - Done when: app boots, navigates, and VoiceOver focus order is correct on Home.
 
 Week 2 (Mar 7-Mar 13): Search + Place Summary
-- Mar 7: Start `/places/search` API integration and result model wiring.
-- Mar 9: Implement `/places/{id}/summary` integration and snapshot mapping.
+- Mar 7: Implement local place search query pipeline and result model wiring.
+- Mar 9: Implement local place summary query and snapshot mapping.
 - Mar 11: Complete Search screen + Place Detail UI with spoken summary behavior.
 - Mar 13: End-to-end demo and acceptance check.
 - Done when: user can search and hear usable summary end-to-end.
 
 Week 3 (Mar 14-Mar 20): Feedback Pipeline
 - Mar 14: Start speech capture and transcript preview flow.
-- Mar 16: Implement POST review + confirm/edit UX.
-- Mar 18: Complete server rule-based parser/tagger and review persistence wiring.
+- Mar 16: Implement local review create + confirm/edit UX.
+- Mar 18: Complete in-app rule-based parser/tagger and local review persistence wiring.
 - Mar 20: Timing validation (voice review submission under 30 seconds).
 - Done when: user can submit a voice review in under 30 seconds.
 
@@ -601,13 +578,13 @@ Week 4 (Mar 21-Mar 27): Nearby + Recency Feed
 - Mar 27: On-site flow validation (no QR, minimal taps).
 - Done when: on-site flow works with no QR and minimal taps.
 
-Week 5 (Mar 28-Apr 3): Scoring + Snapshot Jobs + Hardening
-- Mar 28: Implement score computation job + summary bullet generation.
-- Mar 30: Add low-evidence cap and “low confidence” messaging.
+Week 5 (Mar 28-Apr 3): Scoring + Snapshot Recompute + Hardening
+- Mar 28: Implement in-app score computation + summary bullet generation.
+- Mar 30: Add low-confidence thresholds and structural-failure score cap messaging.
 - Apr 1: Accessibility QA with VoiceOver users/testers.
-- Apr 2: Offline queue tests, error handling, analytics events.
+- Apr 2: Local persistence recovery tests, error handling, analytics events.
 - Apr 3: Release readiness review + TestFlight go/no-go.
-- Done when: accessibility score updates reflect new reviews within 15 minutes and release checklist passes with stable TestFlight build.
+- Done when: accessibility score updates reflect confirmed reviews immediately after local commit and release checklist passes with stable TestFlight build.
 
 14. QA Checklist (Must Pass Before MVP Release)
 
@@ -618,7 +595,7 @@ Week 5 (Mar 28-Apr 3): Scoring + Snapshot Jobs + Hardening
   - Check nearby reviews
 - No QR flow required anywhere.
 - No crash during permission denial (location/microphone/speech).
-- Offline review queue survives app restart.
+- Local review drafts and edits survive app restart.
 - Confidence score and summary fields always present (fallback text if low data).
 
 15. Post-MVP (Optional AI Later)
@@ -630,9 +607,9 @@ Week 5 (Mar 28-Apr 3): Scoring + Snapshot Jobs + Hardening
 16. Immediate Implementation Start (First Tickets)
 
 - Ticket 1: Create SwiftUI app shell + accessibility utilities.
-- Ticket 2: Implement place search API + Search screen.
-- Ticket 3: Implement place summary API + Detail screen with spoken summary.
+- Ticket 2: Implement local place search service + Search screen.
+- Ticket 3: Implement local place summary service + Detail screen with spoken summary.
 - Ticket 4: Implement speech-to-text review submission + confirmation.
-- Ticket 5: Build backend rule parser + review persistence.
+- Ticket 5: Build in-app rule parser + local review persistence.
 - Ticket 6: Add nearby places screen using CoreLocation foreground updates.
-- Ticket 7: Add local cache + outbox queue + retry worker.
+- Ticket 7: Add local DB recovery flow + write-retry worker for transient DB lock.

@@ -10,7 +10,7 @@
 
 ### 2.1 Navigation and Information Architecture
 - Navigation approach: `NavigationStack` single-stack navigation to avoid deep modal nesting.
-- Main navigation entry points: 4 main buttons on Home (Search, Nearby, Feedback, Replay Tutorial).
+- Main navigation entry points on Home: 3 primary buttons (`Search`, `Nearby`, `Replay Tutorial`) + a persistent bottom icon menu.
 - Role-related entry points: Unified access through the "Role Switch" page, avoiding frequent interruptions in normal flows.
 
 ### 2.2 Global Page Skeleton
@@ -81,23 +81,34 @@ Each page follows the same structure:
 
 ### P0 Pages
 1. Login and Role Page (Login + Role Switch)
-2. First-Time Tutorial Page (Tutorial)
+2. First-Time Tutorial Page (Tutorial) (Make last; screen record using the app & add voiceover)
 3. Home Page (Home)
-4. Search Page (Search)
+4. Search Bar (Search) (Same page as Search Results Page)
 5. Search Results Page (Search Results)
 6. Place Detail Page (Place Detail)
 7. Review Capture Page (Review Capture)
 8. Review Confirm Page (Review Confirm)
-9. Nearby Page (Nearby)
+9. Nearby Page (Nearby) (Integrate into search page) 
+
+- App layout: persistent bottom icon menu (visible only after Login and Tutorial pages):
+  - Left icon: `Settings`
+  - Center icon: `Home`
+  - Right icon: `Create Review`
+  - `Create Review` auto-prefills location from the most recently visited place when available.
 
 ### P1 Pages (admin/demo capabilities)
-10. Venue Maintenance Page (Venue Maintenance)
-11. Community Moderation Page (Community Moderation)
-12. Local Data Tools Page (Local Data Tools)
+10. Settings Page (Check role, change username/password, delete account)
+11. Venue Maintenance Page (Venue Maintenance) 
+12. Community Moderation Page (Community Moderation)
+13. Local Data Tools Page (Local Data Tools)
 
 ## 4. Detailed Pagination Design
 
 ## 4.1 Login and Role Page (Login + Role Switch)
+- Choose roles after signing up/automatically select role after logging in
+- 1 role per user 
+- Option to add profile picture 
+
 **Page Goal**
 - Let users enter the app by selecting a local demo identity.
 - Support fast role switching without real authentication.
@@ -185,8 +196,13 @@ Each page follows the same structure:
 ---
 
 ## 4.2 First-Time Tutorial Page (Tutorial)
+- Only for new users
+- Mainly audio with visual tutorial
+  - Users will typically be assisted 
+
 **Page Goal**
 - Help new users quickly understand core operations.
+- Bottom icon menu is hidden on this page.
 
 **Layout Structure**
 1. Title: `Luma Audio Tutorial`
@@ -209,19 +225,31 @@ Each page follows the same structure:
 ## 4.3 Home Page (Home)
 **Page Goal**
 - Serve as the distribution hub for all core tasks.
+- This is the first page where the persistent bottom icon menu appears.
+
+**Entry Conditions**
+- First-time user path: Login and Role -> Tutorial -> Home.
+- Returning user with completed tutorial: Login/role restore -> Home.
+- Bottom icon menu is hidden on Login and Tutorial pages, and shown from Home onward.
 
 **Layout Structure**
 1. Title: `Luma Home`
 2. Current role tag (read-only): `Current role: xxx`
-3. Four main buttons (vertical):
+3. Three main buttons (vertical):
    - Search Places
    - Nearby Places
-   - Review Current Place
    - Replay Tutorial
 4. Secondary entries: `Switch Role`, `Local Data Tools` (visibility controlled by role)
+5. Bottom menu bar (persistent, icon-based):
+   - Left icon: `Settings`
+   - Center icon: `Home` (active on Home page)
+   - Right icon: `Create Review`
 
 **Key Interactions**
 - Tap a main button to enter the corresponding flow.
+- Tap `Create Review` from the bottom bar to jump to Review Capture with location prefill when recent place exists.
+- Tap `Settings` to open user/settings page.
+- Tap `Home` icon to return to the Home page root.
 
 **State Design**
 - Startup check in progress: Main buttons disabled.
@@ -229,11 +257,16 @@ Each page follows the same structure:
 
 **VoiceOver Design**
 - First focus: `Luma Home`.
-- Entry announcement: `Home. Please choose Search, Nearby, or Review Current Place.`
+- Entry announcement: `Home. Please choose Search or Nearby.`
+- Bottom menu icons announce labels in order: `Settings`, `Home`, `Create Review`.
 
 ---
 
-## 4.4 Search Page (Search)
+## 4.4 Search Bar
+- Voice/text input
+- Users can include needs that the AI will use as filters for displaying locations in the Search Results Page 
+
+
 **Page Goal**
 - Support both text and voice input for place keywords.
 
@@ -261,6 +294,23 @@ Each page follows the same structure:
 ---
 
 ## 4.5 Search Results Page (Search Results)
+- Show highest rated locations first
+- 5 locations per page
+- Also factor in distance of the location from the user
+- Press to have voiceover present info for each location
+  - Simple voiceover: name, overall rating, location
+  - Detailed voiceover: ratings for each factor in conversational tone (eg: pros/cons), voice input to ask a question & get AI voiceover answer based on location info + reviews
+    - Ratings for each factor can be read depending on the user's desired factors -> users directly ask through voice input 
+    - AI response based on reviews needs to determine which reviews to use (eg: don't use reviews older than 1 year)
+    - AI response can be based on maintenance users' instructions too if there are any 
+    - Reorder locations based on user questions/needs
+    - Allow follow-up questions through button/touch gesture 
+  - Save user details/needs based on previous questions & mention them in detailed voiceover if possible 
+
+- Click on individual location to jump to Place Detail Page
+
+- AI model: doubao(?)
+
 **Page Goal**
 - Let users quickly compare candidate places and enter details.
 
@@ -268,7 +318,7 @@ Each page follows the same structure:
 1. Title: `Search Results`
 2. Results list (card rows):
    - Place name
-   - Distance
+   - Distance & location
    - Accessibility score
    - Optional confidence tag (`Low confidence` when evidence is limited)
    - Latest update time
@@ -387,6 +437,8 @@ Each page follows the same structure:
 ---
 
 ## 4.9 Nearby Page (Nearby)
+- Integrate into search page: user can ask for nearby locations 
+
 **Page Goal**
 - Quickly view nearby reference places after arrival.
 
@@ -409,7 +461,48 @@ Each page follows the same structure:
 
 ---
 
-## 4.10 Venue Maintenance Page (Venue Maintenance, maintenance role)
+## 4.10 Settings Page (Settings)
+**Page Goal**
+- Provide a simple account management page for current MVP scope.
+- Let users check current role, change username/password, and delete account.
+
+**Entry Conditions**
+- Entered from the bottom menu `Settings` icon.
+- Bottom menu is visible only after Login and Tutorial are completed.
+- Available to all roles.
+
+**Layout Structure**
+1. Title: `Settings`
+2. Account summary area:
+   - Current role (read-only)
+   - Current username
+3. Account actions:
+   - `Change Username`
+   - `Change Password`
+   - `Delete Account` (destructive)
+4. Confirmation area:
+   - Delete confirmation prompt before final delete action.
+
+**Key Interactions**
+- Tap `Change Username` to edit and save a new username.
+- Tap `Change Password` to edit and save a new password.
+- Tap `Delete Account` to open a confirmation step, then permanently delete local account data.
+
+**State Design**
+- Saving state: disable repeat submit and show loading feedback.
+- Save success: show inline success message and voice announcement.
+- Save failed: show inline error and keep user input for retry.
+- Delete success: clear account/session-related local data and return to Login and Role page.
+
+**VoiceOver Design**
+- First focus: `Settings` title.
+- Save success announcement: `Settings updated`.
+- Delete confirmation announcement: `Delete account confirmation`.
+- Delete success announcement: `Account deleted. Returned to login.`
+
+---
+
+## 4.11 Venue Maintenance Page (Venue Maintenance, maintenance role)
 **Page Goal**
 - Demonstrate venue maintenance role capability to update venue status.
 
@@ -432,7 +525,7 @@ Each page follows the same structure:
 
 ---
 
-## 4.11 Community Moderation Page (Community Moderation, management role)
+## 4.12 Community Moderation Page (Community Moderation, management role)
 **Page Goal**
 - Demonstrate community management role capability to moderate feedback content.
 
@@ -451,7 +544,7 @@ Each page follows the same structure:
 
 ---
 
-## 4.12 Local Data Tools Page (Local Data Tools)
+## 4.13 Local Data Tools Page (Local Data Tools)
 **Page Goal**
 - Support quick cache/outbox diagnostics and recovery during review and integration testing.
 
@@ -471,12 +564,14 @@ Each page follows the same structure:
 - Operation success announcement: `Local data updated`.
 
 ## 5. Page Flow Relationships (Text Version)
-- First open or invalid local role -> Login and Role Page -> Home Page
+- First open or invalid local role -> Login and Role Page -> Tutorial Page -> Home Page
 - Existing user reopen with valid local role -> Home Page (direct)
 - Home Page -> Search Page -> Search Results Page -> Place Detail Page
 - Home Page -> Nearby Page -> Place Detail Page
 - Home Page/Place Detail Page -> Review Capture Page -> Review Confirm Page -> Place Detail Page
+- Home Page -> Settings Page
 - Home Page (role-based) -> Venue Maintenance Page / Community Moderation Page / Local Data Tools Page
+- Bottom icon menu visibility: hidden on Login/Tutorial, visible from Home onward.
 
 ## 6. Page-Level Acceptance Checklist
 - First focus on every page is the title.

@@ -1,0 +1,870 @@
+# 开发路线的开发日志 (Development Iteration Log)
+
+## 项目
+- Project: Luma iPhone App
+- Repository Path: `/Users/angel/Downloads/app/Luma`
+- Xcode Project: `Luma.xcodeproj`
+- Main Scheme: `Luma`
+- Log Owner: Angel
+
+## 使用规则
+1. 每次迭代都创建一个新条目（Iteration N）。
+2. 每次迭代至少记录：目标、改动文件、验证结果、风险、下一步。
+3. 每次迭代结束后，提交 Git commit，并记录 commit hash。
+4. 如果有需求文档变化，必须记录对应文档和章节。
+
+---
+
+## Iteration 0 (Baseline)
+- Date: 2026-03-19
+- Goal:
+  - 确认工程可在本机 Xcode 环境打开并编译。
+  - 建立可持续的开发日志规范。
+- Related Docs:
+  - `Luma_MVP_Requirements_Analysis_Document_EN.md`
+  - `Luma_UI_Page-By-Page_Design.md`
+  - `Technical_Roadmap_Updated.md`
+- Changes Made:
+  - Ran `xcodebuild -runFirstLaunch` to fix local Xcode plugin initialization.
+  - Verified project and scheme:
+    - `xcodebuild -list -project Luma.xcodeproj`
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build`
+  - Added this log file.
+- Build/Test Result:
+  - `BUILD SUCCEEDED` (iOS Simulator generic destination).
+- Risk/Notes:
+  - Working tree currently has multiple uncommitted files; keep iteration commits scoped and traceable.
+- Next Iteration Plan:
+  - Implement P0 `Home` structure from UI doc (Search/Nearby/Review/Tutorial entry buttons and role-aware visibility).
+
+---
+
+## Iteration 1
+- Date: 2026-03-19
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Implement the first Login page as a local role selection entry screen for iPhone MVP.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - FR-00 Local demo accounts and role switching
+    - UI Page 4.1 Login and Role Page
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` section 4.1
+- Scope:
+  - In:
+    - Role card login UI
+    - Role persistence and session restore
+    - Home entry after role selection
+  - Out:
+    - Full Home P0 entry buttons
+    - Search/Nearby/Review/Tutorial implementation
+- Changes Made:
+  - File: `Luma/AuthFlowView.swift`
+  - Why:
+    - Replace old email/apple/guest gate with role-based login screen for MVP flow.
+  - What changed:
+    - Added role selection cards (3 roles), Continue button, selection helper copy, VoiceOver labels/hints/announcements.
+    - Updated Home screen copy to show current role and provide role reset action.
+  - File: `Luma/SessionStore.swift`
+  - Why:
+    - Persist and expose selected role as app session state.
+  - What changed:
+    - Added `AppRole` enum and new auth mode `role(AppRole)`.
+    - Added `currentRole` and `selectRole(_:)`.
+  - File: `Luma/SessionStorage.swift`
+  - Why:
+    - Save and restore role login state locally.
+  - What changed:
+    - Added role serialization/deserialization in UserDefaults.
+    - Added `last_role_switch_at` write on role selection.
+- UI/UX Notes:
+  - VoiceOver labels/hints:
+    - Role card state readout + continue hint when no role selected.
+  - Focus order:
+    - Title -> subtitle -> role cards -> continue button.
+  - Error states:
+    - Local inline error slot kept for future save failures.
+- Data/Logic Notes:
+  - Model/repository/rules touched:
+    - Session auth mode + local UserDefaults keys.
+  - Migration needed? (Yes/No):
+    - No.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Pending in Xcode simulator run.
+  - Accessibility checks:
+    - VoiceOver announcement hooks added for login page selection and continue.
+- Risks / Known Issues:
+  - Role switch from Home currently uses reset-and-relogin path; dedicated in-home role-switch page can be added in a later iteration.
+- Next Iteration:
+  - Build P0 Home action buttons and role-based visibility rules.
+
+---
+
+## Iteration 2
+- Date: 2026-03-19
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Integrate all page-title inline notes into the formal P0/P1 page section content in the UI design document.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI spec update for P0 + P1 page documentation consistency
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` section 3 and section 4.x
+- Scope:
+  - In:
+    - Rewrite section text to absorb loose notes under page titles
+    - Keep document structure clean and implementation-ready
+  - Out:
+    - Code changes
+    - API/data schema changes
+- Changes Made:
+  - File: `Luma_UI_Page-By-Page_Design.md`
+  - Why:
+    - Remove orphan bullet notes and fold them into structured fields (Goal/Layout/Interactions/Rules).
+  - What changed:
+    - Integrated 4.1 role selection constraints (single role, auto-restore, optional profile picture).
+    - Integrated 4.2 new-user + audio-first tutorial intent.
+    - Integrated 4.3 global bottom menu + create-review prefill behavior.
+    - Integrated 4.4 needs-based filtering handoff from Search to Results.
+    - Integrated 4.5 ranking/page-size/voice detail/AI assistive notes into explicit sections.
+    - Integrated 4.7 auto-filled review location context.
+    - Integrated 4.9 Search-nearby mode linkage and updated page flow.
+- Validation:
+  - Manual review:
+    - Confirmed no loose bullet notes remain directly under page titles for edited P0/P1 sections.
+- Risks / Known Issues:
+  - AI-model/provider note remains marked as candidate/TBD in the Search Results section.
+- Next Iteration:
+  - Continue UI implementation against updated spec sections in priority order.
+
+---
+
+## Iteration 3
+- Date: 2026-03-19
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Update login page code to be bilingual (English + Chinese) and align behavior with UI design section 4.1.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - FR-00 Local demo accounts and role switching
+    - UI Page 4.1 Login and Role Page
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` section 4.1
+- Scope:
+  - In:
+    - Login page localization and VoiceOver copy localization
+    - Home-triggered role switch mode with preselection + Cancel action
+    - Optional profile photo picker UI on login page
+  - Out:
+    - Full implementation of other P0 pages
+- Changes Made:
+  - File: `Luma/AuthFlowView.swift`
+  - Why:
+    - Bring login page behavior and copy in line with the page-by-page design while supporting bilingual UI.
+  - What changed:
+    - Added localized text usage for all login/home labels and announcements.
+    - Added optional profile photo picker section.
+    - Added `Cancel` action visible in role-switch mode.
+    - Updated Home button to enter role-switch mode instead of clearing session directly.
+  - File: `Luma/SessionStore.swift`
+  - Why:
+    - Support role-switch mode state required by login page design.
+  - What changed:
+    - Added `isRoleSwitching`, `shouldShowRoleSelection`, `beginRoleSwitch()`, `cancelRoleSwitch()`.
+  - File: `Luma/ContentView.swift`
+  - Why:
+    - Route to role page correctly during role-switch mode.
+  - What changed:
+    - Entry view now uses `sessionStore.shouldShowRoleSelection`.
+  - File: `Luma/L10n.swift`, `Luma/en.lproj/Localizable.strings`, `Luma/zh-Hans.lproj/Localizable.strings`
+  - Why:
+    - Provide bilingual localization foundation for current app copy.
+  - What changed:
+    - Added localization helper + EN/ZH string tables for login/auth/home copy.
+  - File: `Luma/AuthService.swift`, `Luma/AuthViewModel.swift`
+  - Why:
+    - Ensure auth-related errors/announcements are bilingual too.
+  - What changed:
+    - Replaced hardcoded strings with localization keys.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Pending: language switch test in simulator (`English` / `简体中文`) and role-switch cancel flow.
+- Risks / Known Issues:
+  - Profile photo picker currently handles UI selection only; persistent avatar storage can be added in a later iteration if required.
+- Next Iteration:
+  - Continue Home/Search P0 implementation with the same localization approach.
+
+---
+
+## Iteration 4
+- Date: 2026-03-19
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Show English and Chinese simultaneously in UI text (not language-switch dependent).
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - Bilingual UI requirement for current implemented flows
+  - Source doc sections:
+    - Current login/auth/home implementation scope
+- Scope:
+  - In:
+    - Bilingual rendering behavior for existing `L10n.tr` and `L10n.format` calls
+  - Out:
+    - Additional new pages/features
+- Changes Made:
+  - File: `Luma/L10n.swift`
+  - Why:
+    - Ensure visible text always contains both English and Chinese at the same time.
+  - What changed:
+    - Added explicit English (`en`) and Simplified Chinese (`zh-Hans`) bundle lookups.
+    - Updated translation helpers to output `English / 中文`.
+    - Updated formatted string helper to build bilingual formatted output.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Pending: visually confirm bilingual UI in simulator for login/home copy.
+- Risks / Known Issues:
+  - VoiceOver announcements now read bilingual text and may be longer than single-language announcements.
+- Next Iteration:
+  - If needed, tune bilingual display style (single line vs two-line) per component for readability.
+
+---
+
+## Iteration 5
+- Date: 2026-03-19
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Simplify login flow for accessibility and add account signup/signin page before role selection.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - Requested UX adjustment: no Continue button on role page
+    - Add credential step before role selection
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` section 4.1 (adapted per latest feedback)
+- Scope:
+  - In:
+    - Two-step auth flow: credentials page -> role selection page
+    - Direct role tap to continue (no Continue button)
+    - Email/username + password support for returning users
+    - Signup with email + username + password
+  - Out:
+    - Deeper account profile features (password reset, persistent profile editing)
+- Changes Made:
+  - File: `Luma/AuthFlowView.swift`
+  - Why:
+    - Reduce interaction cost for visually impaired users and add missing account credential page.
+  - What changed:
+    - Added `AccountEntryView` (sign in/sign up).
+    - Added simplified `RoleSelectionView` with immediate role selection navigation.
+    - Removed Continue requirement from role page.
+  - File: `Luma/SessionStore.swift`
+  - Why:
+    - Route app correctly through new two-step entry flow.
+  - What changed:
+    - Added `shouldShowAuthEntry`, `shouldShowHome`, updated `shouldShowRoleSelection`.
+    - Added `login(identifier:password:)` and `register(email:username:password:)`.
+  - File: `Luma/AuthService.swift`
+  - Why:
+    - Support username-based sign-in and username collection at sign-up.
+  - What changed:
+    - Added account `username` field.
+    - Added new auth protocol/service methods for identifier login and username signup.
+    - Added `invalidUsername` error path.
+  - File: `Luma/ContentView.swift`
+  - Why:
+    - Correctly choose between auth flow and home.
+  - What changed:
+    - Uses `sessionStore.shouldShowHome`.
+  - File: `Luma/en.lproj/Localizable.strings`, `Luma/zh-Hans.lproj/Localizable.strings`
+  - Why:
+    - Localize new account-entry and role-selection copy.
+  - What changed:
+    - Added keys for sign in/sign up fields, role selection text, and announcements.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Pending: full walkthrough `sign up -> role tap -> home`, and `sign in -> role tap -> home`.
+- Risks / Known Issues:
+  - Current local session model still prioritizes role persistence behavior; cross-session account lifecycle can be refined in future iteration.
+- Next Iteration:
+  - Split new views into separate files (`AccountEntryView`, `RoleSelectionView`) to match file-level organization standard.
+
+---
+
+## Iteration 6
+- Date: 2026-03-19
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Disable session restoration for test runs so app always starts from first page.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - Test-flow control for repeated first-page validation
+  - Source doc sections:
+    - N/A (testing behavior request)
+- Scope:
+  - In:
+    - Always clear persisted session on launch for current build behavior
+  - Out:
+    - Changes to account data persistence
+- Changes Made:
+  - File: `Luma/SessionStore.swift`
+  - Why:
+    - Add configurable restoration behavior at initialization time.
+  - What changed:
+    - Added `restorePreviousSession` init option.
+    - When disabled, session store starts at `nil` auth and clears saved auth mode.
+  - File: `Luma/ContentView.swift`
+  - Why:
+    - Apply no-restore behavior for app test runs.
+  - What changed:
+    - Uses `SessionStore(restorePreviousSession: false)`.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Pending: relaunch app multiple times and verify first page appears every run.
+- Risks / Known Issues:
+  - Session restoration is currently disabled by configuration in `ContentView`; switch to `true` when persistent resume behavior is desired.
+- Next Iteration:
+  - Optional: expose this behavior via a debug flag instead of hardcoding.
+
+---
+
+## Iteration 7
+- Date: 2026-03-19
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Simplify login UX further and add voice input for all text-entry fields.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - Login flow simplification for visually impaired users
+    - Pre-role account auth step (sign in/sign up)
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` auth and role-entry flow (adapted by new UX request)
+- Scope:
+  - In:
+    - Remove subtitle text under sign-in/sign-up title page
+    - Separate sign-in and create-account pages
+    - Direct role selection tap (no continue)
+    - Voice input for all text fields
+  - Out:
+    - Password reset and external auth providers
+- Changes Made:
+  - Files added:
+    - `Luma/AuthEntryChoiceView.swift`
+    - `Luma/SignInPageView.swift`
+    - `Luma/CreateAccountPageView.swift`
+    - `Luma/RoleSelectionView.swift`
+    - `Luma/SpeechInputController.swift`
+    - `Luma/UIHelpers.swift`
+  - Files updated:
+    - `Luma/AuthFlowView.swift` (container + home only)
+    - `Luma/AuthService.swift` (username field and identifier login support)
+    - `Luma/en.lproj/Localizable.strings`
+    - `Luma/zh-Hans.lproj/Localizable.strings`
+    - `Luma.xcodeproj/project.pbxproj` (speech/mic usage descriptions)
+  - Why:
+    - Improve flow clarity and reduce interaction burden during testing.
+  - What changed:
+    - Create Account now navigates to its own page.
+    - Sign In and Create Account each have dedicated forms.
+    - Role page selects and continues immediately on tap.
+    - Each form text field includes a mic button for speech-to-text.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Pending: verify speech permission prompts and dictation behavior for each field in simulator/device.
+- Risks / Known Issues:
+  - Voice input requires microphone + speech recognition permissions.
+- Next Iteration:
+  - Tune button sizing/spacing for even lower cognitive load in VoiceOver-only usage.
+
+---
+
+## Iteration 8
+- Date: 2026-03-19
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Fix sign-in navigation confusion and remove extra subtitle text from auth entry page.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - Auth entry usability clarification
+  - Source doc sections:
+    - Current auth/login implementation scope
+- Scope:
+  - In:
+    - Explicit page separation and navigation clarity for sign in/create account
+    - Voice input support utility stability
+  - Out:
+    - Broader auth backend changes
+- Changes Made:
+  - File: `Luma/AuthEntryChoiceView.swift`
+  - Why:
+    - Make sign-in/create-account choices explicit as separate navigation targets.
+  - What changed:
+    - Separate choice screen with two clear destination pages.
+  - Files: `Luma/SignInPageView.swift`, `Luma/CreateAccountPageView.swift`
+  - Why:
+    - Ensure successful submit advances user flow.
+  - What changed:
+    - On successful auth, dismisses current page so role-selection screen is shown.
+    - Added direct link from sign-in page to create-account page.
+  - File: `Luma/SpeechInputController.swift`
+  - Why:
+    - Resolve compile issue and support speech-input object state updates.
+  - What changed:
+    - Added `Combine` import for `ObservableObject`.
+  - Localization files:
+    - Added strings for new sign-in/create-account flow and speech UI labels.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Pending: verify `Sign In -> Role Selection` and `Create Account -> Role Selection` transitions in simulator.
+- Risks / Known Issues:
+  - Sign in still requires an existing local account; first-time users should use Create Account first.
+- Next Iteration:
+  - Add an inline helper on sign-in page when account is not found to guide users to Create Account.
+
+---
+
+## Iteration 9
+- Date: 2026-03-19
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Guarantee auth navigation sequence is always `Sign In/Create Account -> Role Selection -> Home`.
+  - Resolve Create Account submit/button reliability issue.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.1 Login and Role Page
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` section 4.1
+- Scope:
+  - In:
+    - Deterministic auth-to-role routing
+    - Main-actor-safe submit state updates for sign-in/sign-up
+  - Out:
+    - Backend auth expansion and profile feature work
+- Changes Made:
+  - File: `Luma/AuthFlowView.swift`
+  - Why:
+    - Remove ambiguity from push/dismiss based transitions.
+  - What changed:
+    - Added explicit auth navigation routes (`signIn`, `createAccount`) with `NavigationStack(path:)`.
+    - Clears auth path automatically once auth entry is complete so app lands on Role Selection.
+  - File: `Luma/AuthEntryChoiceView.swift`
+  - Why:
+    - Keep entry page simple and controlled by parent flow state.
+  - What changed:
+    - Replaced destination-coupled `NavigationLink` controls with explicit action buttons.
+  - Files: `Luma/SignInPageView.swift`, `Luma/CreateAccountPageView.swift`
+  - Why:
+    - Prevent submit button from getting stuck and keep UI state updates predictable.
+  - What changed:
+    - Removed submit-time `dismiss()` dependency.
+    - Moved submit `Task` state updates to `@MainActor`.
+    - Kept sign-in page path to create-account page via parent flow callback.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Pending in simulator:
+      - `Create Account -> Role Selection -> Role tap -> Home`
+      - `Sign In -> Role Selection -> Role tap -> Home`
+- Risks / Known Issues:
+  - Sign-in still requires an existing local account; first-run users should create account first.
+- Next Iteration:
+  - Add inline sign-in helper CTA when account is not found to direct users to Create Account.
+
+---
+
+## Iteration 10
+- Date: 2026-03-19
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Remove all password requirement checks per latest product direction.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - Auth flow adjustment request
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` section 4.1 (auth entry flow)
+- Scope:
+  - In:
+    - Remove password length constraints in sign-in, sign-up, and auth service logic
+  - Out:
+    - Any change to account identity validation rules (email/username existence checks remain)
+- Changes Made:
+  - File: `Luma/SignInPageView.swift`
+  - Why:
+    - Ensure sign-in does not block users on password length.
+  - What changed:
+    - Removed local `password.count < 6` validation and related weak-password error path.
+  - File: `Luma/CreateAccountPageView.swift`
+  - Why:
+    - Ensure account creation does not impose password length rules.
+  - What changed:
+    - Removed local `password.count < 6` validation and related weak-password error path.
+  - File: `Luma/AuthService.swift`
+  - Why:
+    - Remove backend-side password strength checks so UI and service behavior are consistent.
+  - What changed:
+    - Removed `guard password.count >= 6` checks from both login and register methods.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Pending in simulator:
+      - Create account with short/empty password should proceed if other fields are valid.
+      - Sign in with matching stored short/empty password should proceed.
+- Risks / Known Issues:
+  - Allowing very weak/empty passwords reduces account security for any future non-demo environment.
+- Next Iteration:
+  - If needed, add a product-level toggle to enable/disable password policy by build configuration.
+
+---
+
+## Iteration 11
+- Date: 2026-03-19
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Simplify role-card descriptions on the Select Role page to concise bilingual text.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.1 role selection readability update
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` section 4.1
+- Scope:
+  - In:
+    - Shorten role summary and permission description copy in EN + ZH
+  - Out:
+    - Role logic and navigation changes
+- Changes Made:
+  - Files: `Luma/en.lproj/Localizable.strings`, `Luma/zh-Hans.lproj/Localizable.strings`
+  - Why:
+    - Reduce reading load on role cards and keep each language concise.
+  - What changed:
+    - Rewrote the three role `summary` strings to shorter phrases.
+    - Rewrote the three role `permission` strings to shorter phrases.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Pending in simulator: verify role-card text now appears as shorter 1–2 line blocks.
+- Risks / Known Issues:
+  - Bilingual combined display (`EN / ZH`) may still wrap differently across device sizes.
+- Next Iteration:
+  - If needed, add role-card specific line limits or adaptive text sizing for smaller screens.
+
+---
+
+## Iteration 12
+- Date: 2026-03-19
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Record a consolidated status update after recent auth-flow and role-page simplifications.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.1 Login and Role Page
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` section 4.1
+- Scope:
+  - In:
+    - Development log update only
+  - Out:
+    - New code or UI behavior changes
+- Changes Made:
+  - File: `Development_Iteration_Log.md`
+  - Why:
+    - Keep iteration tracking current and maintain clear handoff context for the next build cycle.
+  - What changed:
+    - Added this status-sync iteration entry.
+    - Confirmed recent completed updates are documented:
+      - Deterministic `Sign In/Create Account -> Role -> Home` flow
+      - Password requirement removal
+      - Simplified bilingual role-card description copy
+- Validation:
+  - Build command + result:
+    - Not run in this log-only iteration (last successful build recorded in Iteration 11).
+  - Manual test cases:
+    - Pending:
+      - `Create Account -> Role -> Home`
+      - `Sign In -> Role -> Home`
+      - Role-card text readability on small iPhone screens
+- Risks / Known Issues:
+  - Combined bilingual text (`EN / ZH`) can still wrap differently by device width and Dynamic Type size.
+- Next Iteration:
+  - Start next page implementation and keep each page in separate files for clarity.
+
+---
+
+## Iteration 13
+- Date: 2026-03-20
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Update page-by-page design to formalize persistent bottom icon menu behavior and post-onboarding visibility rules.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - Home navigation structure update
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` sections 2.1, 3 (P0 app layout note), 4.2, 4.3, and 5
+- Scope:
+  - In:
+    - Documentation update only
+  - Out:
+    - Code implementation
+- Changes Made:
+  - File: `Luma_UI_Page-By-Page_Design.md`
+  - Why:
+    - Align navigation spec with latest UX requirement: bottom icon menu with Home centered and onboarding gating.
+  - What changed:
+    - Defined persistent bottom icon menu as: left `Settings`, center `Home`, right `Create Review`.
+    - Added rule that the bottom icon menu is hidden on Login and Tutorial pages and appears from Home onward.
+    - Updated Home section interactions and voiceover notes to match new menu behavior.
+    - Updated page flow relationship to: `Login -> Tutorial -> Home` for first-time users.
+- Validation:
+  - Build command + result:
+    - Not run (documentation-only iteration).
+  - Manual test cases:
+    - N/A for this iteration.
+- Risks / Known Issues:
+  - Document still contains some temporary note bullets in other sections that may require future cleanup.
+- Next Iteration:
+  - Implement Home page UI according to this updated menu specification.
+
+---
+
+## Iteration 14
+- Date: 2026-03-20
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Implement persistent bottom menu bar in Xcode app with icon-based navigation.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - Home bottom menu: `Settings`, centered `Home`, `Create Review`
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` section 4.3 and global app layout notes
+- Scope:
+  - In:
+    - Icon bottom menu bar UI and navigation wiring in Home flow
+    - Bilingual labels for all new Home/menu strings
+  - Out:
+    - Full Settings page feature implementation
+- Changes Made:
+  - File: `Luma/HomePageView.swift`
+  - Why:
+    - Replace text-only bottom controls with icon-based persistent menu and align routing to current spec.
+  - What changed:
+    - Added icon menu buttons:
+      - Left: `Settings` (`gearshape`)
+      - Center: `Home` (`house`)
+      - Right: `Create Review` (`square.and.pencil.circle`)
+    - Added selected-state visuals and icon variants.
+    - Kept menu persistent via bottom safe-area inset.
+    - Updated destination key naming from `userSettings` to `settings`.
+  - Files: `Luma/en.lproj/Localizable.strings`, `Luma/zh-Hans.lproj/Localizable.strings`
+  - Why:
+    - Ensure all new menu/home labels and placeholder text remain bilingual.
+  - What changed:
+    - Added missing `home.menu.*`, `home.dest.*`, `home.button.*`, and related announcement keys used by Home/menu flow.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Pending in simulator:
+      - Tap `Settings`, `Home`, `Create Review` from bottom menu.
+      - Confirm menu stays visible while navigating within Home flow.
+      - Confirm labels render as `English / 中文`.
+- Risks / Known Issues:
+  - Tutorial gating for bottom menu visibility is defined in design and should be enforced once tutorial flow is fully implemented in code.
+- Next Iteration:
+  - Implement full `Settings` page (role view, username/password change, delete account) using the simplified design spec.
+
+---
+
+## Iteration 15
+- Date: 2026-03-20
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Reduce visual text load on Home and Role pages by shortening role labels/descriptions.
+  - Update bottom menu bar to icon-only style (no visible text labels).
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.1 Login and Role Page (role card readability)
+    - UI Page 4.3 Home Page (bottom icon menu)
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` sections 4.1 and 4.3
+- Scope:
+  - In:
+    - Role title/summary copy shortening in EN + ZH localization
+    - Role card text density reduction on Role page
+    - Bottom menu visual change to icon-only while keeping accessibility labels
+  - Out:
+    - Role permissions/logic changes
+    - Navigation flow redesign
+- Changes Made:
+  - File: `Luma/zh-Hans.lproj/Localizable.strings`
+  - Why:
+    - Keep role names and summaries short and less overwhelming in Chinese UI.
+  - What changed:
+    - Shortened `role.low_vision.title` from `视障/低视力用户` to `视障用户`.
+    - Simplified role naming/copy (including `社区管理` to `社区审核`) and shortened role summaries.
+    - Shortened Home current-role prefix text from `当前角色：%@` to `角色：%@`.
+  - File: `Luma/en.lproj/Localizable.strings`
+  - Why:
+    - Keep English role names/summaries concise and aligned with the same simplification strategy.
+  - What changed:
+    - Shortened role titles and summary lines (`Visually Impaired User`, `Venue Maintainer`, `Community Moderator`).
+    - Shortened Home current-role prefix from `Current role: %@` to `Role: %@`.
+  - File: `Luma/RoleSelectionView.swift`
+  - Why:
+    - Reduce per-card reading load on the Role page.
+  - What changed:
+    - Removed the extra `permissionHint` text line from role cards.
+    - Kept card title + concise summary with existing accessibility label/hint behavior.
+  - File: `Luma/HomePageView.swift`
+  - Why:
+    - Match requested icon-only bottom menu presentation.
+  - What changed:
+    - Removed visible text labels from bottom menu buttons; icons remain with selected-state visuals.
+    - Preserved accessibility labels for each icon button.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -sdk iphonesimulator -configuration Debug build CODE_SIGNING_ALLOWED=NO` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Pending in simulator:
+      - Home shows shorter role line and role names.
+      - Role page cards show shorter copy with reduced text density.
+      - Bottom menu displays icons only and still reads labels through VoiceOver.
+- Risks / Known Issues:
+  - Icon-only navigation may reduce discoverability for some sighted users; accessibility labels still cover screen-reader users.
+- Next Iteration:
+  - If discoverability feedback appears, add optional first-run tooltip hints for bottom-menu icons without restoring persistent text labels.
+
+---
+
+## Iteration 16
+- Date: 2026-03-20
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Implement full Settings page for MVP account management flow.
+  - Improve bilingual readability by showing English and Chinese on separate lines.
+  - Ensure returning users who press `Sign In` do not re-enter role selection.
+  - Fix misleading “email already exists” behavior when username (not email) is duplicated.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.10 Settings Page
+    - Auth flow adjustment from latest feedback (`Sign In` should assume returning user)
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` section 4.10
+    - Latest in-thread UX clarifications for auth behavior and bilingual readability
+- Scope:
+  - In:
+    - Settings page UI + local account update/delete actions
+    - Auth service/session updates for saved per-account role behavior
+    - Bilingual rendering style update (`EN` line + `ZH` line)
+    - Registration duplicate-check error specificity
+  - Out:
+    - Search/results/review feature work
+- Changes Made:
+  - File: `Luma/SettingsPageView.swift`
+  - Why:
+    - Replace Settings placeholder with functional account settings page.
+  - What changed:
+    - Added account summary (role/username/email), username/password update actions, destructive delete-account confirmation.
+    - Added loading/success/error states and VoiceOver announcements for update/delete flow.
+  - Files: `Luma/AuthService.swift`, `Luma/SessionStore.swift`
+  - Why:
+    - Support settings operations and returning-user role persistence behavior.
+  - What changed:
+    - Added `currentAccountProfile`, username/password update, and delete-account operations.
+    - Added per-account saved role map (`email -> role`) and save/load helpers.
+    - `Sign In` now resolves directly to role for returning users (saved role, else fallback and persist).
+    - Fixed registration duplicate checks: email collision and username collision now return distinct errors.
+  - File: `Luma/HomePageView.swift`
+  - Why:
+    - Wire real Settings page into existing Home navigation.
+  - What changed:
+    - Replaced Settings placeholder destination with `SettingsPageView(sessionStore:)`.
+  - File: `Luma/L10n.swift`
+  - Why:
+    - Improve readability of bilingual text globally.
+  - What changed:
+    - Updated bilingual join output from `English / 中文` to two-line format:
+      - `English`
+      - `中文`
+  - Files: `Luma/en.lproj/Localizable.strings`, `Luma/zh-Hans.lproj/Localizable.strings`
+  - Why:
+    - Add missing settings/auth strings and bilingual announcements.
+  - What changed:
+    - Added settings page labels, button text, confirmation copy, and new auth error keys.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -sdk iphonesimulator -configuration Debug build CODE_SIGNING_ALLOWED=NO` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Pending in simulator/device:
+      - Existing account `Sign In` should open Home directly without role page.
+      - `Create Account` should still lead to role selection for new users.
+      - Settings username/password update and delete-account confirmation flow.
+      - Attempt create with new email + existing username should show username-taken style error.
+      - Verify bilingual text appears on separate lines across key pages.
+- Risks / Known Issues:
+  - For legacy accounts without prior role mapping, sign-in fallback currently defaults to `lowVisionUser` and then persists it.
+- Next Iteration:
+  - Add a lightweight migration strategy (or one-time role selection prompt) if product wants non-default role recovery for legacy accounts.
+
+---
+
+## Iteration Template (Copy for each new iteration)
+
+### Iteration N
+- Date:
+- Branch:
+- Commit:
+- Goal:
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+  - Source doc sections:
+- Scope:
+  - In:
+  - Out:
+- Changes Made:
+  - File:
+  - Why:
+  - What changed:
+- UI/UX Notes:
+  - VoiceOver labels/hints:
+  - Focus order:
+  - Error states:
+- Data/Logic Notes:
+  - Model/repository/rules touched:
+  - Migration needed? (Yes/No):
+- Validation:
+  - Build command + result:
+  - Manual test cases:
+  - Accessibility checks:
+- Risks / Known Issues:
+- Next Iteration:

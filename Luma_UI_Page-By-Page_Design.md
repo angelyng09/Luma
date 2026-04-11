@@ -3,7 +3,7 @@
 ## 1. Document Information
 - Document Name: Luma UI Detailed Pagination Design (Text Version)
 - Applicable Version: Luma iOS MVP (local demo identities)
-- Updated On: 2026-03-11
+- Updated On: 2026-04-03
 - Design Principles: VoiceOver-first, low interaction cost, shared data + offline fallback loop
 
 ## 2. Global Design Guidelines
@@ -79,7 +79,7 @@ Each page follows the same structure:
 
 ## 3. Page List (by Priority)
 
-### P0 Pages
+### P0 Pagesin
 1. Login and Role Page (Login + Role Switch)
 2. First-Time Tutorial Page (Tutorial) (Make last; screen record using the app & add voiceover)
 3. Home Page (Home)
@@ -94,7 +94,7 @@ Each page follows the same structure:
   - Left icon: `Settings`
   - Center icon: `Home`
   - Right icon: `Create Review`
-  - `Create Review` auto-prefills location from the most recently visited place when available.
+  - `Create Review` prefills place as a suggestion only: recent searched place (within 24h) first, then recent visited/reviewed place; users can always edit manually.
 
 ### P1 Pages (admin/demo capabilities)
 10. Settings Page (Check role, change username/password, delete account)
@@ -247,7 +247,11 @@ Each page follows the same structure:
 
 **Key Interactions**
 - Tap a main button to enter the corresponding flow.
-- Tap `Create Review` from the bottom bar to jump to Review Capture with location prefill when recent place exists.
+- Tap `Create Review` from the bottom bar to jump to Review Capture:
+  - First-time/no-history users start with empty place input.
+  - If recent search result exists within 24h, prefill that place as suggestion.
+  - Otherwise fallback to recent visited/reviewed place as suggestion.
+  - Place remains fully editable.
 - Tap `Settings` to open user/settings page.
 - Tap `Home` icon to return to the Home page root.
 
@@ -385,26 +389,37 @@ Each page follows the same structure:
 
 ## 4.7 Review Capture Page (Review Capture)
 **Page Goal**
-- Complete voice feedback capture with low effort.
+- Let users save a structured accessibility review with minimal effort while keeping place selection flexible.
 
 **Layout Structure**
-1. Title: `Voice Feedback`
-2. Recording controls: `Start Recording` / `Stop Recording`
-3. Transcript preview (editable)
-4. Secondary actions: `Re-record`, `Clear Text`
-5. Bottom primary button: `Next: Confirm`
+1. Title: `Create Review`
+2. Place suggestion area:
+   - If recent search result is fresh (<= 24h): show it as suggested prefill.
+   - Else if recent visited/reviewed place exists: show it as fallback suggestion.
+   - Else: show no-suggestion helper text for first-time users.
+3. Place text input (editable, required)
+4. Secondary place actions:
+   - `Search and Select Place` (navigates to Search page)
+   - `Use Recent Search: {place}` (visible when recent search exists)
+5. Rating input (`1-5`)
+6. Accessibility notes input (required)
+7. Primary action: `Next: Confirm`
+8. Recent in-app reviews list (latest first)
 
 **Key Interactions**
-- After recording, run transcription and fill text box.
+- Users can always type a different place than the suggested one before saving.
+- Tapping `Search and Select Place` opens Search flow; after returning, latest search can be applied as place suggestion.
+- Tapping `Next: Confirm` opens Review Confirm page for final save.
 
 **State Design**
-- Recording: Show real-time status and duration.
-- Transcribing: Show `Transcribing`.
-- Permission denied: Show "Go to Settings" + text input fallback.
+- No suggestion state: place field stays empty with helper copy.
+- `Next: Confirm` enabled only when place and notes are both non-empty.
+- After confirm-save success, show inline success message on capture page and refresh recent review list.
 
 **VoiceOver Design**
-- First focus: `Start Voice Feedback` button.
-- Transcription completion announcement: `Transcript ready. Confirm or edit.`
+- First focus: page title `Create Review`.
+- Suggested-place copy explicitly states that place is editable.
+- Save success announcement: `Review saved and available for AI context.`
 
 ---
 

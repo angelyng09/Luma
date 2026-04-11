@@ -1,25 +1,25 @@
-# 开发路线的开发日志 (Development Iteration Log)
+# Development Iteration Log
 
-## 项目
+## Project
 - Project: Luma iPhone App
 - Repository Path: `/Users/angel/Downloads/app/Luma`
 - Xcode Project: `Luma.xcodeproj`
 - Main Scheme: `Luma`
 - Log Owner: Angel
 
-## 使用规则
-1. 每次迭代都创建一个新条目（Iteration N）。
-2. 每次迭代至少记录：目标、改动文件、验证结果、风险、下一步。
-3. 每次迭代结束后，提交 Git commit，并记录 commit hash。
-4. 如果有需求文档变化，必须记录对应文档和章节。
+## Usage Rules
+1. Create a new entry for every iteration (Iteration N).
+2. Each iteration should include at least: goal, changed files, validation results, risks, and next steps.
+3. After each iteration, create a Git commit and record the commit hash.
+4. If requirement documents change, record the related document and section.
 
 ---
 
 ## Iteration 0 (Baseline)
 - Date: 2026-03-19
 - Goal:
-  - 确认工程可在本机 Xcode 环境打开并编译。
-  - 建立可持续的开发日志规范。
+  - Confirm the project opens and builds in the local Xcode environment.
+  - Establish a sustainable iteration logging standard.
 - Related Docs:
   - `Luma_MVP_Requirements_Analysis_Document_EN.md`
   - `Luma_UI_Page-By-Page_Design.md`
@@ -196,7 +196,7 @@
   - Build command + result:
     - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
   - Manual test cases:
-    - Pending: language switch test in simulator (`English` / `简体中文`) and role-switch cancel flow.
+    - Pending: language switch test in simulator (`English` / `Simplified Chinese`) and role-switch cancel flow.
 - Risks / Known Issues:
   - Profile photo picker currently handles UI selection only; persistent avatar storage can be added in a later iteration if required.
 - Next Iteration:
@@ -226,7 +226,7 @@
     - Ensure visible text always contains both English and Chinese at the same time.
   - What changed:
     - Added explicit English (`en`) and Simplified Chinese (`zh-Hans`) bundle lookups.
-    - Updated translation helpers to output `English / 中文`.
+    - Updated translation helpers to output `English / Chinese`.
     - Updated formatted string helper to build bilingual formatted output.
 - Validation:
   - Build command + result:
@@ -568,7 +568,7 @@
   - Build command + result:
     - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
   - Manual test cases:
-    - Pending in simulator: verify role-card text now appears as shorter 1–2 line blocks.
+    - Pending in simulator: verify role-card text now appears as shorter 1-2 line blocks.
 - Risks / Known Issues:
   - Bilingual combined display (`EN / ZH`) may still wrap differently across device sizes.
 - Next Iteration:
@@ -695,7 +695,7 @@
     - Pending in simulator:
       - Tap `Settings`, `Home`, `Create Review` from bottom menu.
       - Confirm menu stays visible while navigating within Home flow.
-      - Confirm labels render as `English / 中文`.
+      - Confirm labels render as `English / Chinese`.
 - Risks / Known Issues:
   - Tutorial gating for bottom menu visibility is defined in design and should be enforced once tutorial flow is fully implemented in code.
 - Next Iteration:
@@ -729,9 +729,9 @@
   - Why:
     - Keep role names and summaries short and less overwhelming in Chinese UI.
   - What changed:
-    - Shortened `role.low_vision.title` from `视障/低视力用户` to `视障用户`.
-    - Simplified role naming/copy (including `社区管理` to `社区审核`) and shortened role summaries.
-    - Shortened Home current-role prefix text from `当前角色：%@` to `角色：%@`.
+    - Shortened the Chinese low-vision role title to a more concise wording.
+    - Simplified Chinese role naming/copy and shortened role summaries.
+    - Shortened the Chinese Home current-role prefix text.
   - File: `Luma/en.lproj/Localizable.strings`
   - Why:
     - Keep English role names/summaries concise and aligned with the same simplification strategy.
@@ -773,7 +773,7 @@
   - Implement full Settings page for MVP account management flow.
   - Improve bilingual readability by showing English and Chinese on separate lines.
   - Ensure returning users who press `Sign In` do not re-enter role selection.
-  - Fix misleading “email already exists” behavior when username (not email) is duplicated.
+  - Fix misleading "email already exists" behavior when username (not email) is duplicated.
 - Requirement Mapping:
   - FR IDs / Page IDs:
     - UI Page 4.10 Settings Page
@@ -813,9 +813,9 @@
   - Why:
     - Improve readability of bilingual text globally.
   - What changed:
-    - Updated bilingual join output from `English / 中文` to two-line format:
+    - Updated bilingual join output from `English / Chinese` to two-line format:
       - `English`
-      - `中文`
+      - `Chinese`
   - Files: `Luma/en.lproj/Localizable.strings`, `Luma/zh-Hans.lproj/Localizable.strings`
   - Why:
     - Add missing settings/auth strings and bilingual announcements.
@@ -835,6 +835,706 @@
   - For legacy accounts without prior role mapping, sign-in fallback currently defaults to `lowVisionUser` and then persists it.
 - Next Iteration:
   - Add a lightweight migration strategy (or one-time role selection prompt) if product wants non-default role recovery for legacy accounts.
+
+---
+
+## Iteration 17
+- Date: 2026-03-21
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Complete tonight's end-to-end voice/text AI Q&A pipeline (iOS -> `/ai/ask` -> Qwen).
+  - Strengthen API key secrecy and backend safety handling.
+  - Fix backend connectivity and complete Nearby + Search Results map integration.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.4 Search Bar (voice/text input)
+    - UI Page 4.5 Search Results (result display + map assistance)
+    - UI Page 4.9 Nearby Page (map module)
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` sections 4.4 / 4.5 / 4.9
+- Scope:
+  - In:
+    - Search page speech-to-text + editable text + AI request
+    - New backend `/ai/ask` endpoint connected to Qwen
+    - Map module under the Nearby page header
+    - Map integration in the Search Results section
+    - API key concealment/ignore strategy + lower-sensitivity error messaging
+    - iPhone physical-device LAN connectivity fixes
+  - Out:
+    - Full Search Results dedicated-page refactor
+    - Multi-result map aggregation and advanced filter interactions
+- Changes Made:
+  - iOS (search + AI):
+    - Added `Luma/AIAskService.swift`
+      - Added `/ai/ask` request model, error handling, and backend URL config loading.
+      - Added readable connection-failure errors (including backend address).
+    - Added `Luma/SearchAskView.swift`
+      - Added `Text / Voice` input mode.
+      - Microphone speech recognition writes into an editable text box.
+      - Tapping Ask AI calls backend and displays the response.
+      - Added an Apple Maps mini-map in the result section.
+      - Uses `MKLocalSearch` to update map center and marker from query text.
+    - Updated `Luma/HomePageView.swift`
+      - Connected Search routing to `SearchAskView`.
+      - Added an Apple Maps mini-map section under the Nearby page title.
+  - Localization:
+    - Updated `Luma/en.lproj/Localizable.strings`
+    - Updated `Luma/zh-Hans.lproj/Localizable.strings`
+      - Added search map/results copy, connection-error copy, and nearby-map copy.
+  - Backend:
+    - Added `backend/server.js`
+      - Added `POST /ai/ask`; backend calls Qwen (no key stored in iOS app).
+      - Constrains response language by detected input language (Chinese/English), with concise output shaping.
+    - Added `backend/package.json`, `backend/.env.example`, `backend/README.md`, `backend/.gitignore`
+      - Added startup scripts and environment-variable template.
+    - Updated `backend/server.js`
+      - `/health` no longer exposes `hasApiKey` status.
+      - External errors are generalized while internal logs are retained.
+      - Changed default Qwen base URL to `https://dashscope.aliyuncs.com/compatible-mode/v1`.
+  - Security:
+    - Added root `.gitignore` and tightened backend `.gitignore`
+      - Ignores `.env*` (while keeping `.env.example`) to prevent key commits.
+    - Repo-wide scan found no hardcoded `sk-...` strings in source files.
+  - Connectivity / runtime fixes:
+    - Installed local Node runtime to `/Users/angel/.local/node-current` (for current machine run)
+    - Started backend and verified it listens on `:8080`.
+    - Fixed iPhone physical-device connection: improved backend URL parsing (including `http://:127...`), and auto-adjust `localhost/127.0.0.1` to current LAN IP (`10.0.0.160`) on device.
+    - Verified by real requests that the key works on CN endpoint and not on intl endpoint; endpoint switch completed.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED` (passed multiple times in this iteration)
+  - Backend checks:
+    - `GET /health` -> `{"ok":true,"model":"qwen-plus"}`
+    - `POST /ai/ask` -> returns a valid answer (verified with curl)
+  - Accessibility checks:
+    - Readable announcements retained for speech start/stop, answer-ready, and error states.
+- Risks / Known Issues:
+  - `10.0.0.160` is the current Mac LAN IP for this network and may need updates when network changes.
+  - Search Results map currently shows a single top-priority point; multi-point aggregation is not implemented yet.
+  - Local Node runtime is currently installed in a user-directory path (not system-global).
+- Next Iteration:
+  - Add configurable backend-address entry (Settings/debug) to replace fixed LAN fallback.
+  - Split Search Results into a dedicated page and support multi-result map pins.
+  - Add automatic backend endpoint fallback strategy (CN/intl) and health-check hints.
+
+---
+
+## Iteration 18
+- Date: 2026-03-24
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Fix Search input issue where keyboard dismissed after entering the first character.
+  - Complete AI backend connectivity hardening: URL repair, startup stability, and end-to-end availability verification.
+  - Improve top-right avatar/username interaction on Home so tap goes directly to Settings.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.4 Search Bar (text-input stability)
+    - UI Page 4.10 Settings Page (entry accessibility)
+    - AI backend `/ai/ask` availability and configuration robustness
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` sections 4.3 / 4.4 / 4.10
+- Scope:
+  - In:
+    - iOS input-experience fixes
+    - iOS backend URL parsing and bad-config self-healing
+    - Backend startup logging and startup-script improvements
+    - Home top-right user-badge tap navigation
+  - Out:
+    - Search Results dedicated-page refactor
+    - Multi-endpoint auto-detection and switching strategy
+- Changes Made:
+  - File: `Luma/SearchAskView.swift`
+  - Why:
+    - Prevent `ScrollView` from dismissing keyboard immediately while typing.
+  - What changed:
+    - Changed `.scrollDismissesKeyboard(.immediately)` to `.scrollDismissesKeyboard(.interactively)` to fix first-character keyboard dismissal.
+  - File: `Luma/AIAskService.swift`
+  - Why:
+    - Fix malformed backend-address failures (for example `http://:10.0.0.160:8080`) and prevent persistent bad-config contamination.
+  - What changed:
+    - Hardened `normalizedURL`: supports percent-decoding, extra-colon repair, host cleanup, and auto port completion.
+    - Added auto-cleanup for invalid `UserDefaults` backend config (`luma.backend.base_url`).
+    - Kept simulator/device fallback logic (simulator: `127.0.0.1`, device: LAN IP).
+  - File: `backend/server.js`
+  - Why:
+    - Reduce URL confusion during local/physical-device debugging.
+  - What changed:
+    - Added `HOST` (default `0.0.0.0`) with explicit binding.
+    - Startup now prints both Local and LAN addresses and auto-detects private IPv4.
+  - File: `backend/start-backend.sh` (new)
+  - Why:
+    - Allow one-command backend startup even when `npm` is not in global PATH.
+  - What changed:
+    - Prefers system `npm`; falls back to repo `.tools/node-v*-darwin-*/bin/npm` if missing.
+  - File: `backend/README.md`
+  - Why:
+    - Document unified startup flow and verified URLs for this machine.
+  - What changed:
+    - Added `./backend/start-backend.sh` startup instructions and simulator/device URL examples.
+  - File: `Luma/HomePageView.swift`
+  - Why:
+    - Satisfy interaction requirement: tapping top-right avatar/username should open Settings.
+  - What changed:
+    - Changed toolbar user badge to a `Button`; on tap, `path = [.settings]` opens Settings directly.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED` (passed multiple times in this iteration)
+  - Backend checks:
+    - `GET http://127.0.0.1:8080/health` -> `{"ok":true,"model":"qwen-plus"}`
+    - `GET http://10.0.0.160:8080/health` -> `{"ok":true,"model":"qwen-plus"}`
+    - `POST http://10.0.0.160:8080/ai/ask` -> `200` + valid `answer` (verified in real run)
+  - Manual test cases:
+    - Search input no longer dismisses keyboard after first character (logic fix is in; UI manual verification recommended on simulator/device).
+    - Home top-right user badge can open Settings (build passes; pending UI manual verification).
+  - Accessibility checks:
+    - Kept existing accessibility labels and navigation structure; no known accessibility regression introduced.
+- Risks / Known Issues:
+  - Physical-device fallback still depends on current LAN IP (`10.0.0.160`); may require update after network changes.
+  - Repo-local Node runtime in `.tools` is relatively large; can be replaced later by env install or scripted download.
+- Next Iteration:
+  - Make physical-device backend address configurable (Settings/Debug) and support auto-updates on network change.
+  - Add visible tap feedback for Home top user badge (for example subtle highlight) and extend UI automation coverage.
+  - Add regression test checklist for Search input and `/ai/ask` pipeline.
+
+---
+
+## Iteration 19
+- Date: 2026-03-24
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Make AI responses use app-accessible user context (location, recent places, in-app reviews).
+  - Persist in-app review data locally and connect it to AI requests.
+  - Improve backend safety handling and prompt constraints for context data.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.4 Search Bar (AI Q&A context enhancement)
+    - UI Page 4.7 Create Review (in-app review data capture)
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` sections 4.4 / 4.7
+- Scope:
+  - In:
+    - iOS AI requests carrying structured context
+    - Local review storage + writable Create Review page
+    - User-location capture (after permission) and pass-through as AI context
+    - Backend context sanitization, injection, and priority prompting
+  - Out:
+    - Cloud review sync
+    - Multi-user shared reviews and moderation workflow
+- Changes Made:
+  - File: `Luma/AIAskService.swift`
+  - Why:
+    - Support sending app context in `/ai/ask` requests.
+  - What changed:
+    - Added `AIAskContext` (location, map focus, recent place, reviews).
+    - Upgraded `ask(question:)` to `ask(question:context:)`, adding `context` field to request payload.
+  - File: `Luma/UserLocationProvider.swift` (new)
+  - Why:
+    - Fetch and refresh user location after permission for AI context use.
+  - What changed:
+    - Implemented permission requests and single-shot location refresh using `CLLocationManager`.
+  - File: `Luma/ReviewStore.swift` (new)
+  - Why:
+    - Persist in-app reviews so AI can reference them.
+  - What changed:
+    - Added `LocalReviewEntry` + `LocalReviewStore` (UserDefaults persistence/read, with count limit).
+  - File: `Luma/SearchAskView.swift`
+  - Why:
+    - Send app-known context to AI instead of relying only on general knowledge.
+  - What changed:
+    - Integrated `UserLocationProvider` and `lastVisitedPlaceName`.
+    - Builds context before Ask AI (user location, recent place, map focus, recent local reviews) and sends it with request.
+  - File: `Luma/HomePageView.swift`
+  - Why:
+    - Make Create Review produce real data available for AI context.
+  - What changed:
+    - Upgraded `ReviewCapturePlaceholderView` into an editable form (place, note, rating, save).
+    - On save, writes to `LocalReviewStore`, updates recent place, and displays recent local reviews.
+  - File: `Luma/en.lproj/Localizable.strings`, `Luma/zh-Hans.lproj/Localizable.strings`
+  - Why:
+    - Cover new review form and save-status localization copy.
+  - What changed:
+    - Added review form fields, save-state text, recent-review list text, and keys including `announcement.review_saved`.
+  - File: `Luma.xcodeproj/project.pbxproj`
+  - Why:
+    - Enable location-permission usage text to avoid missing-location-permission issues.
+  - What changed:
+    - Added `INFOPLIST_KEY_NSLocationWhenInUseUsageDescription` in Debug/Release configs.
+  - File: `backend/server.js`
+  - Why:
+    - Backend must safely consume and prioritize in-app context.
+  - What changed:
+    - Added context sanitization (strings, rating, location, map focus, review limits).
+    - Injected context into system-level prompt messages.
+    - Prompt rules explicitly prioritize in-app context; on conflicts, prefer in-app information.
+  - File: `backend/README.md`
+  - Why:
+    - Document the new `/ai/ask` context request format.
+  - What changed:
+    - Updated request examples and added `context` field documentation.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Backend checks:
+    - `GET /health` -> `{"ok":true,"model":"qwen-plus"}`
+    - `POST /ai/ask` (with context) -> returns answers that explicitly reference in-app review content
+    - `POST /ai/ask` (without context) -> returns more generic and limited-information answers
+  - Manual test cases:
+    - After Create Review save, new entry appears in the page's "Recent Reviews" list.
+    - Search Ask requests include local reviews/recent place/location (after permission) as context.
+- Risks / Known Issues:
+  - Location context depends on user permission; AI still works without it but with reduced context.
+  - Reviews are currently local-only and do not sync across devices.
+  - Context still uses a "most recent N items" strategy; can be improved later with place-relevance ranking.
+- Next Iteration:
+  - Add a Settings toggle so users can control whether location/local reviews are sent to AI.
+  - Add place-relevance sorting for context (prioritize reviews related to current query).
+  - Add review edit/delete support and corresponding AI context sync logic.
+
+---
+
+## Iteration 20
+- Date: 2026-04-03
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Clarify Create Review place-source logic to support first-time users and reviews for places other than the most recently searched one.
+  - Separate management of "recent searched place" and "recent visited/reviewed place" to avoid incorrect hard-binding.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.3 Home (bottom Create Review entry behavior)
+    - UI Page 4.7 Review Capture (place prefill + manual override rules)
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` sections 4.3 / 4.7
+- Scope:
+  - In:
+    - Create Review place-suggestion priority and 24-hour freshness rule
+    - Empty-state guidance for first-time users with no history
+    - Explicit `Search and Select Place` entry from Create Review
+  - Out:
+    - Cloud synchronization of place history
+    - Dedicated "tap-to-confirm place selection" page for search results (currently reuses Search page)
+- Changes Made:
+  - File: `Luma/SearchAskView.swift`
+  - Why:
+    - Record "recent searched place" for Review suggestions without overriding manual user input.
+  - What changed:
+    - Added `@AppStorage("home.last_searched_place_name")` and `@AppStorage("home.last_searched_place_at")`.
+    - Writes recent searched place and timestamp when a place name is successfully resolved from search result.
+  - File: `Luma/HomePageView.swift`
+  - Why:
+    - Compute place suggestion by priority when entering Create Review, while keeping manual editability.
+  - What changed:
+    - Added Home place-suggestion strategy:
+      - Prioritize recent searched place within 24 hours.
+      - Otherwise fall back to recent visited/reviewed place.
+      - If neither exists, leave empty (first-time-user scenario).
+    - Added `onSearchPlaceRequested` to `ReviewCapturePlaceholderView` for direct jump from Review to Search.
+    - Added place-edit helper text and `Search and Select Place` button in Review page.
+    - Added `Use Recent Search` quick action (shown only when recent search exists).
+    - Fixed place-draft initialization to seed only on first appearance, preventing overwrite of user manual edits on re-entry.
+  - File: `Luma/en.lproj/Localizable.strings`, `Luma/zh-Hans.lproj/Localizable.strings`
+  - Why:
+    - Support new Review place guidance and action copy.
+  - What changed:
+    - Updated no-prefill copy to suggest "search or type manually."
+    - Added copy for editable-place helper, search/select button, and recent-search shortcut button.
+  - File: `Luma_UI_Page-By-Page_Design.md`
+  - Why:
+    - Sync the above logic into product design spec and remove ambiguity about whether recent place is mandatory.
+  - What changed:
+    - Updated sections 4.3 and 4.7: first-time empty state, 24-hour recent-search priority, always-manual-editable place field, and Search jump from Review.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - First entry into Create Review: place field is empty with "search or type manually" guidance.
+    - Enter Create Review after Search: place suggestion comes from recent searched place within 24h.
+    - After manually editing place in Create Review, returning/reappearing should not auto-overwrite user input.
+    - Tapping `Search and Select Place` from Create Review opens Search page.
+- Risks / Known Issues:
+  - Current "recent searched place" is auto-written from Search page top result, not explicit tap-confirmed selection; a later "confirm this place" action can improve control.
+  - The 24-hour threshold is currently a client constant and can be made configurable later.
+- Next Iteration:
+  - Add explicit `Use this place for review` action in Search results to reduce wrong prefill from automatic top-result matching.
+  - Add suggestion-source tags (`Recent Search` / `Recent Review`) and a quick `Clear place` action.
+
+---
+
+## Iteration 21
+- Date: 2026-04-03
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Complete the remaining Review flow according to the page-by-page design by adding a dedicated Review Confirm page.
+  - Keep existing Create Review data-entry behavior while introducing final confirmation and retry-safe save handling.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.7 Review Capture
+    - UI Page 4.8 Review Confirm
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` sections 4.7 / 4.8
+- Scope:
+  - In:
+    - Capture -> Confirm navigation
+    - Confirm page content and action buttons (`Confirm Save`, `Back to Edit`, `Cancel`)
+    - Save-success and save-failure handling with announcements
+  - Out:
+    - Place Detail page routing after review save
+    - Cloud review persistence
+- Changes Made:
+  - File: `Luma/HomePageView.swift`
+  - Why:
+    - Implement the missing confirm stage in the review pipeline and align capture/confirm responsibilities.
+  - What changed:
+    - Added `ReviewSubmissionDraft` model for passing draft data from capture to confirm.
+    - Updated Capture primary action to open Confirm page (`Next: Confirm`) instead of directly writing storage.
+    - Added `ReviewConfirmView` with:
+      - Original text area
+      - Auto-parsing summary (`Signal Type`, `Suggested Score`)
+      - Action buttons: `Confirm Save`, `Back to Edit`, `Cancel`
+    - Added save flow callback from confirm to capture with:
+      - Success path: persists review, refreshes recent list, updates recent place, and shows success message
+      - Failure path: keeps draft and shows retry-friendly error message
+    - Added cancel-draft behavior distinct from back-to-edit behavior.
+  - Files: `Luma/en.lproj/Localizable.strings`, `Luma/zh-Hans.lproj/Localizable.strings`
+  - Why:
+    - Localize newly added Review Confirm page and related status/announcement text.
+  - What changed:
+    - Added `home.dest.review_confirm.*` keys for confirm page sections, signal labels, and buttons.
+    - Added `announcement.review_submitted` and `announcement.review_save_failed`.
+    - Updated capture button text to `Next: Confirm`.
+  - File: `Luma_UI_Page-By-Page_Design.md`
+  - Why:
+    - Keep design spec synchronized with implemented capture -> confirm flow.
+  - What changed:
+    - Updated section 4.7 primary action from direct save to `Next: Confirm`.
+    - Clarified that final persistence happens in Review Confirm page.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Enter place + notes in Create Review and verify `Next: Confirm` opens Confirm page.
+    - Use `Back to Edit` and verify draft remains editable.
+    - Use `Cancel` and verify draft is discarded from active edit context.
+    - Use `Confirm Save` and verify success message + updated recent-review list.
+- Risks / Known Issues:
+  - Confirm-page auto-parsing uses lightweight keyword heuristics and is not model-based semantic parsing.
+  - Save-failure branch is defensive and may be rare under normal local-storage conditions.
+- Next Iteration:
+  - Route post-save flow to Place Detail once Place Detail page is implemented in navigation.
+  - Replace heuristic signal parsing with a structured parser service if richer categorization is required.
+
+---
+
+## Iteration 22
+- Date: 2026-04-06
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Improve tutorial and search usability for core interaction flow:
+    - Tutorial controls should be vertically stacked.
+    - Search text input keyboard should remain open while typing and dismiss only on Enter or outside tap.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.2 Tutorial controls
+    - UI Page 4.4 Search input behavior
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` sections 4.2 / 4.4
+- Scope:
+  - In:
+    - Tutorial button layout update
+    - Search input focus stability fix
+  - Out:
+    - Broader tutorial content redesign
+    - Search algorithm changes
+- Changes Made:
+  - File: `Luma/HomePageView.swift`
+  - Why:
+    - Match requested tutorial control layout and improve button readability/accessibility.
+  - What changed:
+    - Changed tutorial control container from horizontal row to vertical stack.
+    - Ensured `Play/Pause`, `Repeat`, `Skip`, `Complete` render as separate rows.
+  - File: `Luma/SearchAskView.swift`
+  - Why:
+    - Fix iOS keyboard dismissing after each typed character in search input.
+  - What changed:
+    - Replaced search focus storage from `@FocusState` to stable `@State` binding for custom UIKit text view wrapper.
+    - Updated `SearchQuestionTextEditor.updateUIView` to refresh coordinator parent binding each update (`context.coordinator.parent = self`) to avoid stale bindings across re-renders.
+    - Preserved intended dismiss behavior on Enter and outside tap.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -configuration Debug -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Tutorial screen shows one control button per line.
+    - Search input keeps keyboard open while typing continuously.
+    - Enter key runs search and dismisses keyboard; outside tap dismisses keyboard.
+- Risks / Known Issues:
+  - Custom `UITextView` bridge remains a sensitive area for future refactors; coordinator-parent refresh is now explicitly maintained.
+- Next Iteration:
+  - Continue finishing review and tutorial UX refinements requested during QA pass.
+
+---
+
+## Iteration 23
+- Date: 2026-04-06
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Improve review capture input accessibility and finalize tutorial controls:
+    - Add voice input for review notes.
+    - Rename rating label to “Overall Rating.”
+    - Remove tutorial `Skip` action per updated product decision.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.7 Review Capture
+    - UI Page 4.2 Tutorial
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` sections 4.7 / 4.2
+- Scope:
+  - In:
+    - Review-note dictation button and recording lifecycle handling
+    - Rating label terminology update (EN/ZH)
+    - Tutorial control removal (`Skip`)
+  - Out:
+    - AI-assisted review parsing enhancements
+    - Tutorial chapter-content changes
+- Changes Made:
+  - File: `Luma/HomePageView.swift`
+  - Why:
+    - Add hands-free review note entry and align tutorial control set.
+  - What changed:
+    - Added `SpeechInputController` into `ReviewCapturePlaceholderView`.
+    - Added mic/stop button next to review notes label; transcript writes into notes draft.
+    - Added speech error text display and recording stop on view disappear.
+    - Removed tutorial `Skip` button and deleted unused `skipChapter()` function.
+  - Files: `Luma/en.lproj/Localizable.strings`, `Luma/zh-Hans.lproj/Localizable.strings`
+  - Why:
+    - Keep labels and announcements aligned with updated UX.
+  - What changed:
+    - Updated rating strings from `Rating` to `Overall Rating` (and Chinese equivalent `总体评分`).
+    - Updated tutorial entry announcement text to remove mention of skip action.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -configuration Debug -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Review Capture: mic button starts/stops dictation and updates notes text.
+    - Rating labels show `Overall Rating: x/5`.
+    - Tutorial page no longer exposes `Skip`.
+- Risks / Known Issues:
+  - Dictation quality depends on system speech permissions and ambient audio conditions.
+- Next Iteration:
+  - Address remaining VoiceOver reading issues for dynamic search results and detail pages.
+
+---
+
+## Iteration 24
+- Date: 2026-04-06
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Fix accessibility regressions in search and detail navigation.
+  - Reduce first-focus lag on auth input screens.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.4 Search Results accessibility behavior
+    - UI Page 4.5 Place Detail accessibility behavior
+    - UI Page 4.1 Sign in / Create account input responsiveness
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` sections 4.1 / 4.4 / 4.5
+- Scope:
+  - In:
+    - VoiceOver focus target + announcement handling on results/detail transitions
+    - Input-lag reduction in auth screens by deferring heavy speech setup and using better text input traits
+  - Out:
+    - Full VoiceOver audit of all app pages
+    - Deep profiler/instruments report
+- Changes Made:
+  - File: `Luma/SearchAskView.swift`
+  - Why:
+    - Ensure VoiceOver reads newly loaded search results and detail pages immediately.
+  - What changed:
+    - Added focused heading target for search results (`resultsHeading`) and programmatic focus handoff after search completion.
+    - Marked results title as header + focusable target.
+    - Updated result rows to combined accessibility children while preserving custom label/hint.
+    - Added detail-page focused title target and explicit on-appear announcement (`place name + score`).
+  - File: `Luma/SpeechInputController.swift`
+  - Why:
+    - Reduce first-input lag caused by eager speech object initialization/audio session interactions.
+  - What changed:
+    - Made `AVAudioEngine` and `SFSpeechRecognizer` lazy/optional and initialize on demand.
+    - Strengthened cleanup by deactivating audio session on stop and resetting engine references.
+  - Files: `Luma/UIHelpers.swift`, `Luma/SignInPageView.swift`, `Luma/CreateAccountPageView.swift`
+  - Why:
+    - Use more appropriate text input behavior for username fields.
+  - What changed:
+    - Added `usernameInputBehavior()`.
+    - Applied username behavior to sign-in identifier field and create-account username field.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -configuration Debug -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - After search completion, VoiceOver focus lands on `Search Results` heading and result cards are readable via swipe.
+    - Opening place detail announces title/score and focus lands on detail title.
+    - Auth input first tap responsiveness improved in debug/device testing scenarios.
+- Risks / Known Issues:
+  - Remaining perceived delay on-device may still include unavoidable Debug runtime overhead and iOS keyboard/autofill warm-up.
+- Next Iteration:
+  - Resolve backend connectivity instability on physical iPhone and remove brittle network assumptions.
+
+---
+
+## Iteration 25
+- Date: 2026-04-06
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Fix AI backend connectivity failures on physical iPhone (especially after network/IP changes).
+  - Make backend endpoint configurable at runtime and visible in UI.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - Search Ask AI end-to-end reliability
+    - Settings page operational controls
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` (Search + Settings behavior alignment)
+- Scope:
+  - In:
+    - Remove stale hardcoded device IP behavior
+    - Add Settings UI for backend URL save/reset
+    - Add local-network Info.plist permissions
+    - Show active backend URL on Search page
+    - Update backend README LAN guidance
+  - Out:
+    - Cloud-hosted backend deployment automation
+    - Multi-region failover routing
+- Changes Made:
+  - File: `Luma/AIAskService.swift`
+  - Why:
+    - Existing physical-device fallback/rewrite used a hardcoded LAN IP (`10.0.0.160`) that breaks whenever local network changes.
+  - What changed:
+    - Removed hardcoded device fallback IP and runtime localhost->fixed-IP rewrite.
+    - Added public helpers to read/save/clear user-defined backend URL in UserDefaults:
+      - `userDefinedBaseURLString`
+      - `saveUserDefinedBaseURL(_:)`
+      - `clearUserDefinedBaseURL()`
+    - Kept robust URL normalization and default fallback (`http://127.0.0.1:8080`) behavior.
+  - File: `Luma/SettingsPageView.swift`
+  - Why:
+    - Allow backend endpoint correction without rebuilding app.
+  - What changed:
+    - Added backend section under Preferences:
+      - Backend URL input
+      - Save button
+      - Reset button
+    - Added on-appear backend URL preload and save/reset handlers with validation + user feedback.
+  - File: `Luma/SearchAskView.swift`
+  - Why:
+    - Surface effective backend endpoint for debugging and support.
+  - What changed:
+    - Added footer text showing `Backend URL: %@` derived from `AIAskService.baseURLString`.
+  - Files: `Luma/en.lproj/Localizable.strings`, `Luma/zh-Hans.lproj/Localizable.strings`
+  - Why:
+    - Localize new Settings backend controls/messages.
+  - What changed:
+    - Added `settings.backend.*` string keys for section, description, placeholder, save/reset buttons, and validation/status text.
+  - File: `Luma.xcodeproj/project.pbxproj`
+  - Why:
+    - Ensure iOS app can access local backend service over LAN with explicit metadata.
+  - What changed:
+    - Added `INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES` (Debug/Release).
+    - Added `INFOPLIST_KEY_NSLocalNetworkUsageDescription`.
+  - File: `backend/README.md`
+  - Why:
+    - Remove stale machine-specific LAN IP documentation.
+  - What changed:
+    - Updated physical iPhone guidance to use LAN URL printed at backend startup logs.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -configuration Debug -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Backend checks:
+    - `./backend/start-backend.sh` -> backend started and printed LAN URL for current network.
+    - `curl http://127.0.0.1:8080/health` -> `{"ok":true,"model":"qwen-plus"}`
+    - `POST /ai/ask` test request -> valid answer returned.
+  - Network checks:
+    - Current detected Mac LAN IP: `192.168.3.22`.
+- Risks / Known Issues:
+  - iPhone and Mac must stay on the same LAN and backend must be running.
+  - If network changes, LAN IP may change and Settings backend URL may need update.
+  - If certain network policies/firewalls block LAN HTTP, connection still fails until network policy is adjusted.
+- Next Iteration:
+  - Optionally add a one-tap backend health check button in app Settings.
+  - Optionally add QR-code based backend URL transfer from Mac to phone for faster setup.
+
+---
+
+## Iteration 26
+- Date: 2026-04-07
+- Branch: local working tree
+- Commit: pending
+- Goal:
+  - Complete the Nearby Places page based on `Luma_UI_Page-By-Page_Design.md` page 4.9.
+  - Replace Nearby placeholder with a real location-aware nearby flow and permission fallback.
+- Requirement Mapping:
+  - FR IDs / Page IDs:
+    - UI Page 4.9 Nearby Page (Nearby)
+    - UI Page 4.5 Place Detail (entry from nearby row tap)
+  - Source doc sections:
+    - `Luma_UI_Page-By-Page_Design.md` sections 4.9 / 4.5
+- Scope:
+  - In:
+    - Nearby title/status/list/fallback/loading/announcement behavior
+    - 500m radius nearby lookup and list rendering
+    - Tap-through detail page for nearby place
+    - Manual-search fallback path to Search with prefilled query
+    - EN/ZH localization for new Nearby strings
+  - Out:
+    - Dedicated backend-powered nearby ranking service
+    - Full map-centric nearby UI redesign
+- Changes Made:
+  - File: `Luma/HomePageView.swift`
+  - Why:
+    - Existing Nearby screen was an MVP placeholder (map + sample buttons), not aligned to page-by-page design.
+  - What changed:
+    - Replaced placeholder implementation with a complete Nearby flow:
+      - Added location permission + current position status bar.
+      - Added loading state (`Finding nearby places`), error state, and empty-within-500m state.
+      - Added denied/restricted fallback: manual search entry + action button.
+      - Implemented nearby fetch via `MKLocalPointsOfInterestRequest` with 500m radius.
+      - Added dedupe/filter/sort logic (distance first, then score).
+      - Added row content per design: place name, distance, score, optional low confidence.
+      - Added row VoiceOver label/hint and nearby-count announcements.
+      - Added Nearby detail screen with score, confidence note, pros/cons, update/review-count summary.
+      - Kept visited-place callback so selected nearby place updates recent place context.
+    - Updated to iOS 26-safe MapKit accessors (`item.location.coordinate`) to remove `placemark` deprecation warnings.
+  - File: `Luma/SearchAskView.swift`
+  - Why:
+    - Permission-denied Nearby fallback requires routing users into Search with a prefilled manual query.
+  - What changed:
+    - Added optional `initialQuery` initializer argument.
+    - Added one-time seed logic on appear so query field is prefilled when arriving from Nearby fallback.
+  - Files: `Luma/en.lproj/Localizable.strings`, `Luma/zh-Hans.lproj/Localizable.strings`
+  - Why:
+    - New Nearby states/controls/announcements must be localized.
+  - What changed:
+    - Added `nearby.*` keys for status labels, finding/empty/error text, manual search fallback, row hint, and detail summary copy.
+    - Added `announcement.finding_nearby_places` and `announcement.nearby_found_places`.
+- Validation:
+  - Build command + result:
+    - `xcodebuild -project Luma.xcodeproj -scheme Luma -destination 'generic/platform=iOS Simulator' build` -> `BUILD SUCCEEDED`
+  - Manual test cases:
+    - Nearby page shows title + permission/position status correctly.
+    - With location allowed, nearby list renders places within 500m and supports refresh.
+    - Tapping nearby row opens detail and updates recent visited place context.
+    - With location denied/restricted, manual search fallback is shown and routes to Search with prefilled query.
+    - VoiceOver announcements fire for finding nearby places and nearby-count completion.
+- Risks / Known Issues:
+  - Nearby discovery currently uses Apple Maps POI availability; sparse areas may return few/no places.
+  - Score/confidence for nearby results uses local-review-derived heuristics (no remote confidence service yet).
+- Next Iteration:
+  - Unify search and nearby shared scoring/detail logic into a single reusable place-summary model.
+  - Add explicit “Open in Maps / Directions” action on nearby detail page.
 
 ---
 

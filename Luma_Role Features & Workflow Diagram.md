@@ -6,7 +6,7 @@
 - Updated On: 2026-03-10
 
 ## 2. Role Definitions
-- Visually Impaired/Low-Vision User Account: Core MVP user role, responsible for search, viewing, and feedback.
+- Visually Impaired User Account: Core MVP user role, responsible for search, viewing, and feedback.
 - Venue Maintenance Account: Authenticated operational role, responsible for maintaining venue status fields.
 - Community Management Account: Authenticated moderation role, responsible for managing the status of community feedback content.
 

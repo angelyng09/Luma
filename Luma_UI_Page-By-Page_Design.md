@@ -79,7 +79,7 @@ Each page follows the same structure:
 
 ## 3. Page List (by Priority)
 
-### P0 Pagesin
+### P0 Pages
 1. Login and Role Page (Login + Role Switch)
 2. First-Time Tutorial Page (Tutorial) (Make last; screen record using the app & add voiceover)
 3. Home Page (Home)

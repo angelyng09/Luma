@@ -1,85 +1,35 @@
-# Luma Backend (`/ai/ask`)
+# Luma1
 
-## 1. Setup
+Luma1 is an accessibility app that helps visually impaired users navigate indoor spaces more independently using voice/text input, AI responses, maps, and community accessibility reviews.
 
-```bash
-cd backend
-npm install
-cp .env.example .env
-```
+## How to Run
+- Open `Luma1.xcodeproj` in Xcode
+- Run the app on an iPhone simulator or a physical iPhone
 
-Set `QWEN_API_KEY` in `.env`.
+## Main Features
+- Voice or text place search
+- AI-powered personalized responses
+- Map integration
+- Accessibility review creation
+- VoiceOver-focused accessibility improvements
 
-Example:
+## Judge Testing Notes
+- Start from the home/sign-in flow
+- Try voice or text input on the search page
+- View the map updates
+- Try creating and submitting a review
+- VoiceOver can be enabled to test accessibility features
 
-```env
-QWEN_API_KEY=YOUR_API_KEY_HERE
-```
+## Notes
+- Built with Swift and SwiftUI
+- Final version is frontend-focused
+- Designed for visually impaired users, with community feedback features
 
-For most Qwen keys, use:
+## AI Usage
+- We used the Qwen API to generate responses to user questions
+- The app sends user input (voice or text) along with context (location, history, reviews)
+- The AI returns a concise, personalized answer
+- We did not train our own model; we used a pre-trained AI model via API
 
-```env
-QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-```
-
-## 2. Run
-
-```bash
-npm start
-```
-
-Backend runs on `http://localhost:8080` by default.
-
-If `npm` is not on your shell path, run:
-
-```bash
-./backend/start-backend.sh
-```
-
-Verified URLs:
-
-- Simulator: `http://127.0.0.1:8080/ai/ask`
-- Physical iPhone on same Wi-Fi/LAN: use the LAN URL printed by backend startup logs,
-  for example `http://192.168.3.22:8080/ai/ask`
-
-## 3. Endpoint
-
-`POST /ai/ask`
-
-Request:
-
-```json
-{
-  "question": "Is this place wheelchair accessible?",
-  "context": {
-    "lastVisitedPlaceName": "Sample Place A",
-    "currentLocation": {
-      "latitude": 31.2304,
-      "longitude": 121.4737
-    },
-    "reviews": [
-      {
-        "placeName": "Sample Place A",
-        "note": "Entrance has one step, staff helped with portable ramp.",
-        "rating": 4
-      }
-    ]
-  }
-}
-```
-
-Response:
-
-```json
-{
-  "answer": "Short concise answer..."
-}
-```
-
-## 4. Notes
-
-- Keep `QWEN_API_KEY` only on backend, never in the iOS app.
-- Never commit `.env` files or paste real keys into code, logs, or docs.
-- Response language is auto-selected by input language (`zh` if Chinese characters are detected, otherwise English).
-- Output is constrained to concise key information.
-- App-provided `context` is treated as trusted grounding data and prioritized in answer generation.
+## Development Note
+Earlier iterations included backend-based AI integration. The final version shifted more functionality to the frontend for improved speed and reliability.
